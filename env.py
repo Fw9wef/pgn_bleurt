@@ -1,10 +1,8 @@
-import numpy as np
 import tensorflow as tf
 from tensorflow.keras import layers
 from bleurt import score as bleurt_score
 from utils import remove_bad_words, lens_to_time_step_masks
-from utils import SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING
-from rouge import Rouge
+from rouge_score import rouge_scorer
 
 
 class Env():
@@ -13,7 +11,7 @@ class Env():
         self.bleurt_device = bleurt_device
         with tf.device(self.bleurt_device):
             self.bleurt_scorer = bleurt_score.BleurtScorer('/kaggle/sci/bleurt/bleurt/test_checkpoint')
-        self.rouge_scorer = Rouge(metrics=['rouge-n', 'rouge-l', 'rouge-w'], max_n=2, weight_factor=1.2)
+        self.rouge_scorer = rouge_scorer.RougeScorer(['rouge1', 'rougeL'], use_stemmer=True)
     
     
     def get_rewards(self, batch_texts, batch_tokens, batch_oovs, scoring_model = 'final', no_bad_words=True, get_rogue=True):
