@@ -24,7 +24,7 @@ global_batch_size = batch_size * len(SUMMARY_MODEL_DEVICES)
 path_to_checkpoints = './checkpoints'
 path_to_examples = './examples'
 path_to_metrics = './metrics'
-experiment_name = 'pretrain_mean_very_slowAdam'
+experiment_name = 'rl_try'
 
 tf.debugging.set_log_device_placement(False)
 
@@ -60,7 +60,7 @@ def save_loss(full_path_to_metrics, mean_epoch_loss, train_val='val'):
 
 
 def save_scores(full_path_to_metrics, scores, train_val='val'):
-    f = open(os.path.join(full_path_to_metrics, train_val + '_leurt.txt'), 'a')
+    f = open(os.path.join(full_path_to_metrics, train_val + '_bleurt.txt'), 'a')
     mean_score = np.mean(scores['bleurt'])
     f.write(str(mean_score) + '\n')
     f.close()
@@ -144,7 +144,8 @@ loss_mask = full_dataset['summary_loss_points']
 
 with tf.device('CPU'):
     train_tf_dataset = tf.data.Dataset.from_tensor_slices(
-        (extended_input_tokens, extended_gt_tokens, loss_mask, index)).batch(global_batch_size)
+        (extended_input_tokens, extended_gt_tokens, loss_mask, tf.reshape(tf.constant(summary)(-1, 1)), index)).batch(
+        global_batch_size)
     train_tf_dataset = train_tf_dataset.shuffle(32)
     train_dist_dataset = train_strategy.experimental_distribute_dataset(train_tf_dataset)
 
@@ -162,6 +163,7 @@ val_loss_mask = val_full_dataset['summary_loss_points']
 with tf.device('CPU'):
     val_tf_dataset = tf.data.Dataset.from_tensor_slices(
         (val_extended_input_tokens, val_extended_gt_tokens, val_loss_mask, val_index)).batch(int(global_batch_size / 2))
+    val_tf_dataset = val_tf_dataset.shuffle(250)
     val_dist_dataset = train_strategy.experimental_distribute_dataset(val_tf_dataset)
 
 max_oovs_in_text = max(0, np.max(extended_input_tokens) - vocab.size() + 1,
@@ -180,26 +182,59 @@ print('Max oovs in text :', max_oovs_in_text)
 # DEFINE MULTIGPU TRAIN STEP FUNCTIONS
 
 ##############################################################################################################################
+temp = np.array(list(data.data.vocab._id_to_word.items()))
+vocab_keys = tf.constant(temp[:, 0], dtype=tf.int32)
+vocab_values = tf.constant(temp[:, 1])
+end_decoding_token = data.data.vocab.STOPid
+vocab_size = vocab_keys.shape[0]
 
 with train_strategy.scope():
     model = PGN(vocab=vocab, max_oovs_in_text=max_oovs_in_text)
-    # optimizer = tf.keras.optimizers.Adagrad(learning_rate=0.15, initial_accumulator_value=0.1)
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
+    model.load_weights(path_to_model)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.0001, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
     ce_loss = CELoss(alpha=1.)
-    # cover_loss = CoverLoss(alpha=1., reduction=tf.keras.losses.Reduction.NONE)
-    # rl_loss = RLLoss(alpha=1., reduction=tf.keras.losses.Reduction.NONE)
+    rl_loss = RLLoss(alpha=1.)
+    t_id_to_word_init = tf.lookup.KeyValueTensorInitializer(vocab_keys, vocab_values)
+    t_id_to_word = tf.lookup.StaticHashTable(t_id_to_word_init, default_value=b'[PAD]')
 
 
-# def train_step(inputs):
-def train_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
-    # extended_input_tokens, extended_gt_tokens, loss_mask, _ = inputs
+def decode_seqs(seqs, oovs):
+    oovs_mask = tf.where(seqs >= vocab_keys, 1, 0)
 
-    model.switch_decoding_mode('cross_entropy')
+    for i in range(seqs.shape[0]):
+        sq = seqs[i]
+        oovs_id_to_word = oovs[i, 0]
+        vocab_decode = t_id_to_word.lookup(sq)
+        oovs_decode =
 
+    return strs
+
+
+def get_loss_masks(seqs):
+    return masks
+
+
+def train_step(extended_input_tokens, extended_gt_tokens, loss_mask, gt_summaries, idx):
+    model.switch_decoding_mode('self_critic')
     with tf.GradientTape() as tape:
-        gt_logits, greedy_seqs, coverage_losses = model(extended_input_tokens, extended_gt_tokens, training=True)
-        loss = tf.nn.compute_average_loss(ce_loss(extended_gt_tokens, gt_logits, loss_mask),
-                                          global_batch_size=global_batch_size)
+        greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses = model(extended_input_tokens,
+                                                                                      extended_gt_tokens, training=True)
+
+        cross_entropy = ce_loss(extended_gt_tokens, greedy_probs, loss_mask)
+
+        batch_texts = [summary[i[0]] for i in idx]
+        batch_oovs = [oovs[i[0]] for i in idx]
+        gready_rewards, _, _ = env.get_rewards(batch_texts, greedy_seqs, batch_oovs)
+        gready_rewards = tf.constant(gready_rewards['bleurt'], tf.float32)
+
+        sample_rewards, _, time_step_masks = env.get_rewards(batch_texts, sample_seqs, batch_oovs)
+        sample_rewards = tf.constant(sample_rewards['bleurt'], tf.float32)
+
+        delta_rewards = gready_rewards - sample_rewards
+        time_step_mask = tf.constant(time_step_mask, tf.float32)
+        rewards_loss = rl_loss(sample_seqs, sample_probs, delta_rewards, time_step_mask)
+
+        loss = tf.nn.compute_average_loss(cross_entropy + rewards_loss, global_batch_size=global_batch_size)
 
     grads = tape.gradient(loss, model.trainable_weights)
     grads = [tf.clip_by_norm(g, 2) for g in grads]
@@ -209,19 +244,17 @@ def train_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
 
 
 def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
-    # extended_input_tokens, extended_gt_tokens, loss_mask, _ = inputs
-
     model.switch_decoding_mode('self_critic')
 
-    greedy_logits, sample_logits, greedy_seqs, sample_seqs, coverage_losses = model(extended_input_tokens,
-                                                                                    extended_gt_tokens, training=False)
-    loss = tf.nn.compute_average_loss(ce_loss(extended_gt_tokens, greedy_logits, loss_mask),
+    greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses = model(extended_input_tokens,
+                                                                                  extended_gt_tokens, training=False)
+    loss = tf.nn.compute_average_loss(ce_loss(extended_gt_tokens, greedy_probs, loss_mask),
                                       global_batch_size=global_batch_size)
 
     return loss, greedy_seqs
 
 
-@tf.function
+# @tf.function
 def distributed_step(dist_inputs, mode):
     if mode == 'train':
         per_replica_losses, greedy_seqs = train_strategy.run(train_step, args=(dist_inputs))
@@ -252,7 +285,7 @@ val_batches_per_epoch = len(val_tf_dataset)
 # tf.debugging.set_log_device_placement(True)
 
 for epoch in range(1, pretrain_epochs + 1):
-    new_learning_rate = 0.0005 - (0.0005 - 0.0001) * (epoch - 1) / (pretrain_epochs - 1)
+    new_learning_rate = 0.0001 - (0.0001 - 0.00001) * (epoch - 1) / (pretrain_epochs - 1)
     optimizer.lr.assign(new_learning_rate)
     iterator = iter(train_dist_dataset)
     print('epoch', epoch)
@@ -262,7 +295,6 @@ for epoch in range(1, pretrain_epochs + 1):
         batch = iterator.get_next()
         if check_shapes(batch):
             loss, greedy_seqs = distributed_step(batch, 'train')
-            # loss = distributed_train_step(batch)
             total_batches += 1
             losses.append(loss)
 

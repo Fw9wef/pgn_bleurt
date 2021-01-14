@@ -1,5 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import layers
+import tensorflow_probability as tfp
 
 
 class Encoder(layers.Layer):
@@ -169,15 +170,9 @@ class Decoder(layers.Layer):
                 greedy_token = tf.stop_gradient(greedy_token)
                 greedy_token = tf.cast(greedy_token, tf.int32)
 
-                sample_token = tf.random.categorical(tf.math.log(sample_pred_probs + 1e-12), 1)[:, 0]
-                # sample_token = tf.TensorArray(dtype=tf.int32, size=sample_pred_probs.shape[0], dynamic_size=False)
-                # sample_prob = tf.random.uniform((sample_pred_probs[0]), minval=0., maxval=1.)
-                # cum_pred_probs = tf.math.cumsum(sample_pred_probs, axis=1)
-                # for i in range(sample_pred_probs[0]):
-                #    sample_token = sample_token.write(i, tf.where(cum_pred_probs>sample_prob)[0])
-                # sample_token = sample_token.stack()
+                sample_token = tfp.distributions.Categorical(probs=sample_pred_probs, dtype=tf.int32).sample()
                 sample_token = tf.stop_gradient(sample_token)
-                sample_token = tf.cast(sample_token, tf.int32)
+                # sample_token = tf.cast(sample_token, tf.int32)
 
                 greedy_probs = greedy_probs.write(i, greedy_pred_probs)
                 sample_probs = sample_probs.write(i, sample_pred_probs)
