@@ -129,7 +129,7 @@ class Decoder(layers.Layer):
     def __init__(self, decoding_mode='self_critic', layer_name='decoder', embedding_dim=512,
                  vocab=None, lstm_units=128, bahdanau_attention_units=128, gen_prob_units=128,
                  max_oovs_in_text=100):
-        assert decoding_mode in ['self_critic', 'cross_entropy'], 'Unknown decoding mode'
+        assert decoding_mode in ['self_critic', 'cross_entropy', 'evaluate'], 'Unknown decoding mode'
         self.decoding_mode = decoding_mode
         super(Decoder, self).__init__(name=layer_name)
         self.vocab, self.vocab_size, self.embedding_dim = vocab, vocab.size(), embedding_dim
@@ -141,7 +141,7 @@ class Decoder(layers.Layer):
                                       gen_prob_units=gen_prob_units, max_oovs_in_text=max_oovs_in_text)
 
     def call(self, gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state):
-        if self.decoding_mode == 'self_critic':
+        if self.decoding_mode in ['self_critic', 'evaluate']:
             greedy_coverage_vector = tf.zeros(extended_input_tokens.shape)
             sample_coverage_vector = tf.zeros(extended_input_tokens.shape)
 
@@ -156,10 +156,17 @@ class Decoder(layers.Layer):
             greedy_rnn_state, sample_rnn_state = rnn_state, rnn_state
 
             for i in range(gt_tokens.shape[1]):
-                greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
-                                                 greedy_rnn_state, greedy_prev_word_vector,
-                                                 greedy_coverage_vector)
-                greedy_coverage_vector, greedy_pred_probs, greedy_rnn_state, _ = greedy_output
+                if self.decoding_mode == 'self_critic':
+                    with tape.stop_recording():
+                        greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
+                                                         greedy_rnn_state, greedy_prev_word_vector,
+                                                         greedy_coverage_vector)
+                        greedy_coverage_vector, greedy_pred_probs, greedy_rnn_state, _ = greedy_output
+                else:
+                    greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
+                                                     greedy_rnn_state, greedy_prev_word_vector,
+                                                     greedy_coverage_vector)
+                    greedy_coverage_vector, greedy_pred_probs, greedy_rnn_state, _ = greedy_output
 
                 sample_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
                                                  sample_rnn_state, sample_prev_word_vector,
@@ -241,7 +248,7 @@ class PGN(tf.keras.models.Model):
                                gen_prob_units=gen_prob_units, max_oovs_in_text=max_oovs_in_text)
 
     def switch_decoding_mode(self, mode):
-        assert mode in ['self_critic', 'cross_entropy'], 'Unknown decoding mode'
+        assert mode in ['self_critic', 'cross_entropy', 'evaluate'], 'Unknown decoding mode'
         self.decoding_mode = mode
         self.decoder.decoding_mode = mode
 

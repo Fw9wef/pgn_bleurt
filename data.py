@@ -6,12 +6,13 @@ import tensorflow as tf
 from tqdm import tqdm
 from tensorflow.train import Example
 from utils import SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING
+from settings import vocab_file, vocab_size, data_folder, article_max_tokens, summary_max_tokens
 
 
 class Vocab(object):
     """Vocabulary class for mapping between words and ids (integers)"""
 
-    def __init__(self, vocab_file='/kaggle/sci/finished_files/vocab', max_size=50000):
+    def __init__(self, vocab_file=vocab_file, max_size=vocab_size):
         """
         Creates a vocab of up to max_size words, reading from the vocab_file.
         If max_size is 0, reads the entire vocab file.
@@ -73,13 +74,11 @@ class Vocab(object):
         return self._count
 
 
-class Data():
+class Data:
     """
     Dataset class for creating generator object for tf.data.Dataset class from generator
     """
-
-    def __init__(self, path_to_data='/kaggle/sci/finished_files/chunked/',
-                 vocab=Vocab(), mode='train', max_enc_steps=400):
+    def __init__(self, path_to_data=data_folder, mode='train' , vocab = None):
         """
         Creates a DataGen class object.
 
@@ -100,8 +99,11 @@ class Data():
             self.list_of_files = [os.path.join(path_to_data, x) for x in os.listdir(path_to_data) \
                                   if ('test' in x and '.bin' in x)]
 
-        self.vocab = vocab
-        self.max_enc_steps = max_enc_steps
+        if vocab:
+            self.vocab = vocab
+        else:
+            self.vocab = Vocab()
+        self.stop_decoding = self.vocab.word2id(STOP_DECODING)
 
     def get_tokenizer(self):
         vocab = self.vocab
@@ -171,19 +173,15 @@ class Data():
         summary = tf_example.features.feature['abstract'].bytes_list.value[0].decode("utf-8")
         return article, summary
 
-    def get_generator(self, max_article_len=400, max_summary_len=120):
+    def get_generator(self, max_article_len=article_max_tokens, max_summary_len=summary_max_tokens):
         all_files = self.list_of_files
         text_tokenizer = self.get_tokenizer()
 
         def generator():
-            np.random.shuffle(
-                all_files)  #################################################################################
-            for file in tqdm(
-                    all_files):  #################################################################################
-                reader = open(file,
-                              'rb')  #################################################################################
+            np.random.shuffle(all_files)  ###############
+            for file in tqdm(all_files):  ###############
+                reader = open(file, 'rb')  ##############
                 while True:
-                    # for i in range(10):
                     len_bytes = reader.read(8)
                     if not len_bytes: break
                     str_len = struct.unpack('q', len_bytes)[0]
@@ -196,19 +194,12 @@ class Data():
                                                                                                   max_article_len,
                                                                                                   max_summary_len)
 
-                    # tokenized_article, extended_tokenized_article, oovs_article = text_tokenizer(article, summary)
-                    # tokenized_article = tf.constant(tokenized_article)
                     extended_tokenized_article = tf.constant(extended_tokenized_article)
-
-                    # tokenized_summary, extended_tokenized_summary, oovs_summary = text_tokenizer(summary, maxlen=120)
-                    # tokenized_summary = tf.constant(tokenized_summary)
                     extended_tokenized_summary = tf.constant(extended_tokenized_summary)
 
                     yield {'article_text': article,
-                           # 'article_tokens':tokenized_article,
                            'extended_article_tokens': extended_tokenized_article,
                            'summary_text': summary,
-                           # 'summary_tokens':tokenized_summary,
                            'extended_summary_tokens': extended_tokenized_summary,
                            'oovs': oovs}
 
@@ -233,25 +224,18 @@ class Data():
         text = ' '.join(list_of_words)
         return text
 
-
-class Batcher():
-    def __init__(self, batch_size, data=Data()):
-        self.data = data
-        self.data_gen = self.data.get_generator()
-        self.batch_size = batch_size
-        self.stop_decoding = self.data.vocab.word2id(STOP_DECODING)
-
     def get_all_data(self, get_tensor_dict=False):
         article_text = []
-        article_tokens = []
+        # article_tokens = []
         extended_article_tokens = []
         oovs = []
         summary_text = []
-        summary_tokens = []
+        # summary_tokens = []
         extended_summary_tokens = []
 
+        data_gen = self.get_generator()
         with tf.device('CPU'):
-            for instance in self.data_gen():
+            for instance in data_gen():
                 article_text.append(instance['article_text'])
                 # article_tokens.append(instance['article_tokens'])
                 extended_article_tokens.append(instance['extended_article_tokens'])
@@ -265,24 +249,18 @@ class Batcher():
             # summary_tokens = tf.stack(summary_tokens, axis=0)
             extended_summary_tokens = tf.stack(extended_summary_tokens, axis=0)
 
-            article_lens = tf.where(extended_article_tokens == self.stop_decoding)[:, 1]
-            article_max_len = tf.math.reduce_max(article_lens)
-
+            # article_lens = tf.where(extended_article_tokens == self.stop_decoding)[:, 1]
             summary_lens = tf.where(extended_summary_tokens == self.stop_decoding)[:, 1]
-            summary_max_len = tf.math.reduce_max(summary_lens)
 
-            # article_tokens = article_tokens[:,:article_max_len]
+            # article_tokens = article_tokens[:,:-1]
             extended_article_tokens = extended_article_tokens[:, :-1]
-            # summary_tokens = summary_tokens[:,:summary_max_len]
+            # summary_tokens = summary_tokens[:,:-1]
             extended_summary_tokens = extended_summary_tokens[:, :-1]
 
             summary_max_len = extended_summary_tokens.shape[1]
             summary_loss_points = [[1 for i in range(x)] + [0 for i in range(summary_max_len - x)] for x in
                                    summary_lens]
             summary_loss_points = tf.constant(summary_loss_points, dtype=tf.float32)
-
-            # print(extended_article_tokens.shape)
-            # print(extended_summary_tokens.shape)
 
             index = tf.constant([i for i in range(extended_article_tokens.shape[0])], dtype=tf.int32)
             index = tf.expand_dims(index, axis=1)
@@ -309,59 +287,3 @@ class Batcher():
                 'oovs': oovs,
                 # 'tensor_dicts':tensordicts
                 }
-
-    def __call__(self):
-        while True:
-            article_text = []
-            article_tokens = []
-            extended_article_tokens = []
-            article_oovs = []
-            summary_text = []
-            summary_tokens = []
-            extended_summary_tokens = []
-            summary_oovs = []
-
-            with tf.device('CPU'):
-
-                for i in range(self.batch_size):
-                    instance = next(self.data_gen())
-                    article_text.append(instance['article_text'])
-                    article_tokens.append(instance['article_tokens'])
-                    extended_article_tokens.append(instance['extended_article_tokens'])
-                    article_oovs.append(instance['article_oovs'])
-                    summary_text.append(instance['summary_text'])
-                    summary_tokens.append(instance['summary_tokens'])
-                    extended_summary_tokens.append(instance['extended_summary_tokens'])
-                    summary_oovs.append(instance['summary_oovs'])
-
-                article_tokens = tf.stack(article_tokens, axis=0)
-                extended_article_tokens = tf.stack(extended_article_tokens, axis=0)
-                summary_tokens = tf.stack(summary_tokens, axis=0)
-                extended_summary_tokens = tf.stack(extended_summary_tokens, axis=0)
-
-                article_lens = tf.where(article_tokens == self.stop_decoding)[:, 1]
-                article_max_len = tf.math.reduce_max(article_lens)
-                # article_loss_points = [[1 for i in range(x)]+[0 for i in range(article_max_len-x)] for x in article_lens]
-                # article_loss_points = tf.constant(article_loss_points, dtype=tf.float32)
-
-                summary_lens = tf.where(summary_tokens == self.stop_decoding)[:, 1]
-                summary_max_len = tf.math.reduce_max(summary_lens)
-                summary_loss_points = [[1 for i in range(x)] + [0 for i in range(summary_max_len - x)] for x in
-                                       summary_lens]
-                summary_loss_points = tf.constant(summary_loss_points, dtype=tf.float32)
-
-                article_tokens = article_tokens[:, :article_max_len]
-                extended_article_tokens = extended_article_tokens[:, :article_max_len]
-                summary_tokens = summary_tokens[:, :summary_max_len]
-                extended_summary_tokens = extended_summary_tokens[:, :summary_max_len]
-
-            yield {'article_text': article_text,
-                   'article_tokens': article_tokens,
-                   'extended_article_tokens': extended_article_tokens,
-                   'article_oovs': article_oovs,
-                   # 'article_loss_points':article_loss_points,
-                   'summary_text': summary_text,
-                   'summary_tokens': summary_tokens,
-                   'extended_summary_tokens': extended_summary_tokens,
-                   'summary_oovs': summary_oovs,
-                   'summary_loss_points': summary_loss_points}
