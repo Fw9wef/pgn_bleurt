@@ -235,7 +235,7 @@ class PGN(tf.keras.models.Model):
     def __init__(self, decoding_mode='self_critic', layer_name='pgn', embedding_dim=128,
                  vocab=None, lstm_units=256, bahdanau_attention_units=512, gen_prob_units=128,
                  max_oovs_in_text=100):
-        assert decoding_mode in ['self_critic', 'cross_entropy'], 'Unknown decoding mode'
+        assert decoding_mode in ['self_critic', 'cross_entropy', 'evaluate'], 'Unknown decoding mode'
         super(PGN, self).__init__(name=layer_name)
         self.vocab, self.decoding_mode = vocab, decoding_mode
         self.vocab_size = vocab.size()
