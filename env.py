@@ -5,6 +5,7 @@ from bleurt import score as bleurt_score
 from utils import remove_bad_words, lens_to_time_step_masks
 from utils import SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING
 from rouge_score import rouge_scorer
+from settings import bleurt_model
 
 
 class Env():
@@ -12,7 +13,7 @@ class Env():
         self.data = data
         self.bleurt_device = bleurt_device
         with tf.device(self.bleurt_device):
-            self.bleurt_scorer = bleurt_score.BleurtScorer('./bleurt/bleurt/test_checkpoint')
+            self.bleurt_scorer = bleurt_score.BleurtScorer(bleurt_model)
         self.rouge_scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
 
     def get_rewards(self, batch_texts, batch_tokens, batch_oovs, no_bad_words=True, get_rogue=True):

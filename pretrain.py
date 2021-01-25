@@ -22,7 +22,8 @@ if gpus:
         print(e)
 print("Num GPUs Available: ", len(tf.config.experimental.list_physical_devices('GPU')))
 # Define multigpu strategy
-train_strategy = tf.distribute.MirroredStrategy(devices=gpus)
+devices = ['/device:GPU:'+str(i) for i in gpu_ids]
+train_strategy = tf.distribute.MirroredStrategy(devices=devices)
 
 
 #################################################################################################
