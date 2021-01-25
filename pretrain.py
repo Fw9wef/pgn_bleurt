@@ -126,7 +126,7 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
     return loss, greedy_seqs
 
 
-@tf.function
+#@tf.function
 def distributed_step(dist_inputs, mode):
     if mode == 'pretrain':
         per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
@@ -148,14 +148,14 @@ val_batches_per_epoch = len(val_tf_dataset)
 # tf.debugging.set_log_device_placement(True)
 
 for epoch in range(1, pretrain_epochs + 1):
-    new_learning_rate = 0.0005 - (0.0005 - 0.0001) * (epoch - 1) / (pretrain_epochs - 1)
+    new_learning_rate = 0.0005 - (0.0005 - 0.001) * (epoch - 1) / (pretrain_epochs - 1)
     optimizer.lr.assign(new_learning_rate)
     iterator = iter(train_dist_dataset)
     print('epoch', epoch)
     losses = []
     for batch_n in tqdm(range(1, batches_per_epoch+1)):
 
-        batch = iterator.get_next()
+        batch = next(iterator)
         if check_shapes(batch):
             loss, greedy_seqs = distributed_step(batch, 'train')
             # loss = distributed_train_step(batch)
@@ -183,7 +183,7 @@ for epoch in range(1, pretrain_epochs + 1):
             val_inds = []
             val_iterator = iter(val_dist_dataset)
             for val_batch_n in range(1, min(10, batches_per_epoch)):
-                batch = val_iterator.get_next()
+                batch = next(val_iterator)
                 loss, greedy_seqs = distributed_step(batch, 'eval')
                 val_losses.append(loss)
 

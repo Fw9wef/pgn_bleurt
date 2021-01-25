@@ -114,7 +114,7 @@ class RLLoss(layers.Layer):
 
 
 class RLLoss(layers.Layer):
-    def __init__(self, , layer_name='rl_loss'):
+    def __init__(self, layer_name='rl_loss'):
         super(RLLoss, self).__init__(name=layer_name)
 
     def call(self, chosen_tokens, probs, time_step_mask):
