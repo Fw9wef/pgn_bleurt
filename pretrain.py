@@ -129,13 +129,13 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
 
 #@tf.function
 def distributed_step(dist_inputs, mode):
-    if mode == 'pretrain':
+    if mode == 'train':
         per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
 
     elif mode == 'rl_train':
         per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
 
-    elif mode == 'evaluate':
+    elif mode == 'val':
         per_replica_losses, greedy_seqs = train_strategy.run(eval_step, args=(dist_inputs))
 
     return train_strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_losses, axis=None), greedy_seqs
@@ -185,7 +185,7 @@ for epoch in range(1, pretrain_epochs + 1):
             val_iterator = iter(val_dist_dataset)
             for val_batch_n in range(1, min(10, batches_per_epoch)):
                 batch = next(val_iterator)
-                loss, greedy_seqs = distributed_step(batch, 'eval')
+                loss, greedy_seqs = distributed_step(batch, 'val')
                 val_losses.append(loss)
 
                 with tf.device('CPU'):
