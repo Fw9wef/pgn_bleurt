@@ -1,6 +1,6 @@
 data_folder = '../finished_files/chunked'
 vocab_file = '../finished_files/vocab'
-bleurt_model = '../../bleurt/bleurt/test_checkpoint'
+bleurt_model = '../bleurt/bleurt/test_checkpoint'
 checkpoints_folder = './chk'
 experiment_name = 'test_exp'
 load_model_path = None
