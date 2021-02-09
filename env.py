@@ -8,7 +8,52 @@ from rouge_score import rouge_scorer
 from settings import bleurt_model
 
 
-class Env():
+class Detokenize(layers.Layer):
+    def __init__(self, vocab, **kwargs):
+        super(Detokenize, self).__init__(**kwargs)
+        self.vocab_size = vocab.size()
+        self.pad_id = vocab._word_to_id[PAD_TOKEN]
+        keys, values = [], []
+        for key, value in vocab._id_to_word.items():
+            keys.append(key); values.append(key)
+
+        keys = tf.constant(keys, dtype=tf.int32)
+        values = tf.constant(values)
+        init = tf.lookup.KeyValueTensorInitializer(keys=keys, values=values)
+        self.table = tf.lookup.StaticHashTable(init, default_value=UNKNOWN_TOKEN)
+
+    def call(self, input_seqs, oovs):
+        oovs_mask = tf.where(input_seqs>self.vocab_size, 1, 0)
+        pad_mask = tf.where(input_seqs==self.pad_id, 1, 0)
+
+        # get vocab words
+        vocab_words = self.table.lookup(input_seqs)
+        # get oov words
+        oov_input_seqs = tf.where(input_seqs>self.vocab_size, input_seqs-self.vocab_size, 0)
+        batch_inds = tf.expand_dims(tf.range(input_seqs.shape[0]), axis=-1)
+        batch_inds = tf.tile(batch_inds, [1, input_seqs.shape[1]])
+        indices = tf.stack([batch_inds, oov_input_seqs], axis=-1)
+        oov_words = tf.gather_nd(oovs, indices)
+
+        words = tf.where(oovs_mask==1, oov_words, vocab_words)
+        words = tf.where(pad_mask==1, b'', words)
+
+        strings = tf.strings.join(words, separator=b' ')
+        strings = tf.strings.strip(strings)
+        return strings, pad_mask
+
+
+class BleurtLayer(layers.Layer):
+    def __init__(self, **kwargs):
+        super(BleurtLayer, self).__init__(**kwargs)
+        self.bleurt_ops = bleurt_score.create_bleurt_ops(bleurt_model)
+
+    def call(self, gt_summary, pred_summary):
+        scores = self.bleurt_ops(gt_summary, pred_summary)
+        return scores
+
+
+class Env:
     def __init__(self, data, bleurt_device):
         self.data = data
         self.bleurt_device = bleurt_device
@@ -86,12 +131,12 @@ class CoverLoss(layers.Layer):
         return cover_loss * time_step_mask * self.alpha
 
 
-'''
 class RLLoss(layers.Layer):
     def __init__(self, alpha=1., layer_name='rl_loss'):
         super(RLLoss, self).__init__(name=layer_name)
+        self.alpha = alpha
 
-    def call(self, chosen_tokens, probs, delta_rewards, time_step_mask):
+    def call(self, chosen_tokens, probs, time_step_mask, delta_rewards):
         batch_inds = tf.expand_dims(tf.range(probs.shape[0]), axis=1)
         batch_inds = tf.tile(batch_inds, [1, probs.shape[1]])
 
@@ -99,42 +144,13 @@ class RLLoss(layers.Layer):
         time_inds = tf.tile(time_inds, [probs.shape[0], 1])
 
         inds = tf.stack([batch_inds, time_inds, chosen_tokens], axis=-1)
-        inds = tf.reshape(inds, (-1, 3))
+        # inds = tf.reshape(inds, (-1, 3))
 
-        token_probs = tf.gather_nd(probs, ind)
-        token_probs = tf.reshape(token_probs, probs.shape[:-1])
+        token_probs = tf.gather_nd(probs, inds)
+        # token_probs = tf.reshape(token_probs, probs.shape[:-1])
 
-        loss = -tf.math.log(token_probs) * time_step_mask
-
-        loss = tf.math.reduce_sum(loss, axis=1) * delata_reward
+        loss = - tf.math.log(token_probs) * time_step_mask
+        loss = tf.math.reduce_sum(loss, axis=1) * delta_rewards
         n_tokens = tf.math.reduce_sum(time_step_mask, axis=1)
         mean_loss = loss / n_tokens * self.alpha
-
-        return mean_loss
-'''
-
-
-class RLLoss(layers.Layer):
-    def __init__(self, layer_name='rl_loss'):
-        super(RLLoss, self).__init__(name=layer_name)
-
-    def call(self, chosen_tokens, probs, time_step_mask):
-        batch_inds = tf.expand_dims(tf.range(probs.shape[0]), axis=1)
-        batch_inds = tf.tile(batch_inds, [1, probs.shape[1]])
-
-        time_inds = tf.expand_dims(tf.range(probs.shape[1]), axis=0)
-        time_inds = tf.tile(time_inds, [probs.shape[0], 1])
-
-        inds = tf.stack([batch_inds, time_inds, chosen_tokens], axis=-1)
-        inds = tf.reshape(inds, (-1, 3))
-
-        token_probs = tf.gather_nd(probs, ind)
-        token_probs = tf.reshape(token_probs, probs.shape[:-1])
-
-        loss = -tf.math.log(token_probs) * time_step_mask
-
-        loss = tf.math.reduce_sum(loss, axis=1) * delata_reward
-        n_tokens = tf.math.reduce_sum(time_step_mask, axis=1)
-        mean_loss = loss / n_tokens * self.alpha
-
         return mean_loss

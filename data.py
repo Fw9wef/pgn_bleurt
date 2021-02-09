@@ -265,16 +265,22 @@ class Data:
             index = tf.constant([i for i in range(extended_article_tokens.shape[0])], dtype=tf.int32)
             index = tf.expand_dims(index, axis=1)
 
-            # tensordicts=[]
-            # if get_tensor_dict:
-            #    for oov in oovs:
-            #        temp = dict(oov)
-            #        temp = np.array(list(temp.items()))
-            #        keys = tf.constant(temp[:,0], dtype=tf.int32)
-            #        values = tf.constant(temp[:,1])
-            #        init = tf.lookup.KeyValueTensorInitializer(keys, values)
-            #       table = tf.lookup.StaticHashTable(init, default_value=b'[PAD]')
-            #        tensordicts.append(table)
+            # get oovs in tf.Tensor object
+            max_oovs = 0
+            for oov in oovs:
+                curr_oov_size = len(oov)
+                if curr_oov_size > max_oovs:
+                    max_oovs = curr_oov_size
+
+            tensor_oovs = []
+            for oov in oovs:
+                keys = list(oov.keys())
+                keys.sort()
+                oov_tensor = [oov[key] for key in keys] + ['' for _ in range(max_oovs - len(keys))]
+                oov_tensor = tf.constant(oov_tensor)
+                tensor_oovs.append(oov_tensor)
+            tensor_oovs = tf.stack(tensor_oovs, axis=0)
+
 
         return {'article_text': article_text,
                 # 'article_tokens':article_tokens,
@@ -285,5 +291,5 @@ class Data:
                 'summary_loss_points': summary_loss_points,
                 'index': index,
                 'oovs': oovs,
-                # 'tensor_dicts':tensordicts
+                'tensor_oovs': tensor_oovs
                 }

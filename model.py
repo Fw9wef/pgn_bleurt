@@ -259,7 +259,7 @@ class PGN(tf.keras.models.Model):
 
         rnn_state, enc_output, enc_attn = self.encoder(input_tokens)
 
-        if self.decoding_mode == 'self_critic':
+        if self.decoding_mode in ['self_critic', 'evaluate']:
             decoder_outputs = self.decoder(gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state)
             greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses = decoder_outputs
             return greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses
