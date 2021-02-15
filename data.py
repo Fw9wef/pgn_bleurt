@@ -276,7 +276,7 @@ class Data:
             for oov in oovs:
                 keys = list(oov.keys())
                 keys.sort()
-                oov_tensor = [oov[key] for key in keys] + ['' for _ in range(max_oovs - len(keys))]
+                oov_tensor = [oov[key] for key in keys] + [UNKNOWN_TOKEN for _ in range(max_oovs - len(keys))]
                 oov_tensor = tf.constant(oov_tensor)
                 tensor_oovs.append(oov_tensor)
             tensor_oovs = tf.stack(tensor_oovs, axis=0)

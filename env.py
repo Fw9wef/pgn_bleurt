@@ -13,6 +13,7 @@ class Detokenize(layers.Layer):
         super(Detokenize, self).__init__(**kwargs)
         self.vocab_size = vocab.size()
         self.pad_id = vocab._word_to_id[PAD_TOKEN]
+        self.end_id = vocab._word_to_id[SENTENCE_END]
         keys, values = [], []
         for key, value in vocab._id_to_word.items():
             keys.append(key); values.append(key)
@@ -24,7 +25,12 @@ class Detokenize(layers.Layer):
 
     def call(self, input_seqs, oovs):
         oovs_mask = tf.where(input_seqs>self.vocab_size, 1, 0)
-        pad_mask = tf.where(input_seqs==self.pad_id, 1, 0)
+        # pad_mask = tf.where(input_seqs==self.pad_id, 1, 0)
+        # todo pad_mask должна обнулять слова после токена end
+        loss_mask = tf.ones_like(input_seqs, dtype=tf.float32)
+        for sentence_n in range(loss_mask.shape[0]):
+            ind_token_idx = tf.where(input_seqs[sentence_n] == self.end_id)[0]
+            loss_mask[sentence_n, ind_token_idx:] = 0.
 
         # get vocab words
         vocab_words = self.table.lookup(input_seqs)
@@ -35,12 +41,12 @@ class Detokenize(layers.Layer):
         indices = tf.stack([batch_inds, oov_input_seqs], axis=-1)
         oov_words = tf.gather_nd(oovs, indices)
 
-        words = tf.where(oovs_mask==1, oov_words, vocab_words)
-        words = tf.where(pad_mask==1, b'', words)
+        words = tf.where(oovs_mask == 1, oov_words, vocab_words)
+        words = tf.where(loss_mask == 0, b'', words)
 
         strings = tf.strings.join(words, separator=b' ')
         strings = tf.strings.strip(strings)
-        return strings, pad_mask
+        return strings, loss_mask
 
 
 class BleurtLayer(layers.Layer):
