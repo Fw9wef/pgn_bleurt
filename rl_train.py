@@ -178,7 +178,7 @@ for epoch in range(1, pretrain_epochs + 1):
 
         batch = next(iterator)
         if check_shapes(batch):
-            loss, greedy_seqs, greedy_summaries = distributed_step(batch, 'train')
+            loss, greedy_seqs, greedy_summaries = distributed_step(batch, 'rl_train')
             losses.append(loss)
 
             if batch_n % 200 == 0:
@@ -193,13 +193,13 @@ for epoch in range(1, pretrain_epochs + 1):
                 gt_summaries = [summary[x] for x in train_inds]
                 examples_oovs = [oovs[x] for x in train_inds]
                 scores, summaries, time_step_masks = env.get_rewards(gt_summaries, train_sums, examples_oovs)
-                save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'train',
+                save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'rl_train',
                               in_graph_decodings=in_graph_decodings)
-                save_scores(metrics_folder, scores, 'train')
+                save_scores(metrics_folder, scores, 'rl_train')
 
                 mean_epoch_loss = np.mean(losses)
                 losses = []
-                save_loss(metrics_folder, mean_epoch_loss, 'train')
+                save_loss(metrics_folder, mean_epoch_loss, 'rl_train')
 
                 val_losses = []
                 val_sums = []
