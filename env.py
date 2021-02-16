@@ -33,8 +33,8 @@ class Detokenize(layers.Layer):
             if end_token_idx.shape[0] == 0:
                 sentence_mask = ones
             else:
-                token_idx = end_token_idx[0, 0]
-                sentence_mask = tf.concat([ones[:token_idx], zeros[:token_idx]], axis=0)
+                token_idx = end_token_idx[0, 0] + 1
+                sentence_mask = tf.concat([ones[:token_idx], zeros[token_idx:]], axis=0)
             loss_mask = loss_mask.write(sentence_n, sentence_mask)
         loss_mask = loss_mask.stack()
 
