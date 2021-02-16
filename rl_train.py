@@ -124,6 +124,7 @@ def rl_train_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, id
             sample_summary, sample_mask = detokenize(sample_seqs, oovs)
             greedy_rewards = bleurt_scorer(gt_summary, greedy_summary)
             sample_rewards = bleurt_scorer(gt_summary, sample_summary)
+            print(greedy_rewards)
             delta_rewards = sample_rewards - greedy_rewards
 
         loss += tf.nn.compute_average_loss(rl_loss(sample_seqs, sample_probs, sample_mask, delta_rewards),
