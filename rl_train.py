@@ -147,13 +147,13 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     return loss, greedy_seqs
 
 
-@tf.function
+#@tf.function
 def distributed_step(dist_inputs, mode):
     if mode == 'train':
         per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
 
     elif mode == 'rl_train':
-        per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
+        per_replica_losses, greedy_seqs = train_strategy.run(rl_train_step, args=(dist_inputs))
 
     elif mode == 'val':
         per_replica_losses, greedy_seqs = train_strategy.run(eval_step, args=(dist_inputs))
