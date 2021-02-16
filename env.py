@@ -29,8 +29,7 @@ class Detokenize(layers.Layer):
         ones = tf.ones_like(input_seqs[0], dtype=tf.float32)
         zeros = tf.zeros_like(input_seqs[0], dtype=tf.float32)
         for sentence_n in range(input_seqs.shape[0]):
-            end_token_idx = tf.where(input_seqs[sentence_n] == self.end_id)[0]
-            print(end_token_idx)
+            end_token_idx = tf.where(input_seqs[sentence_n] == self.end_id)
             if end_token_idx.shape[0] == 0:
                 sentence_mask = ones
             else:

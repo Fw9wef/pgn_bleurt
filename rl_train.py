@@ -150,15 +150,16 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
 #@tf.function
 def distributed_step(dist_inputs, mode):
     if mode == 'train':
-        per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
+        per_replica_losses, greedy_seqs, greedy_summary = train_strategy.run(pretrain_step, args=(dist_inputs))
 
     elif mode == 'rl_train':
-        per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
+        per_replica_losses, greedy_seqs, greedy_summary = train_strategy.run(pretrain_step, args=(dist_inputs))
 
     elif mode == 'val':
-        per_replica_losses, greedy_seqs = train_strategy.run(eval_step, args=(dist_inputs))
+        per_replica_losses, greedy_seqs, greedy_summary = train_strategy.run(eval_step, args=(dist_inputs))
 
-    return train_strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_losses, axis=None), greedy_seqs
+    return train_strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_losses, axis=None),\
+           greedy_seqs, greedy_summary
 
 
 env = Env(data=data, bleurt_device='cpu')
@@ -181,7 +182,7 @@ for epoch in range(1, pretrain_epochs + 1):
             loss, greedy_seqs, greedy_summaries = distributed_step(batch, 'rl_train')
             losses.append(loss)
 
-            if batch_n % 200 == 0:
+            if batch_n % 1 == 0:
                 # if True:
                 with tf.device('CPU'):
                     train_sums = list(tf.concat(greedy_seqs.values, axis=0).numpy())
