@@ -1,6 +1,7 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 import tensorflow_probability as tfp
+# from contextvars import ContextVar
 
 
 class Encoder(layers.Layer):
@@ -157,11 +158,11 @@ class Decoder(layers.Layer):
 
             for i in range(gt_tokens.shape[1]):
                 if self.decoding_mode == 'self_critic':
-                    with tape.stop_recording():
-                        greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
-                                                         greedy_rnn_state, greedy_prev_word_vector,
-                                                         greedy_coverage_vector)
-                        greedy_coverage_vector, greedy_pred_probs, greedy_rnn_state, _ = greedy_output
+                    # with tape.stop_recording():
+                    greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
+                                                     greedy_rnn_state, greedy_prev_word_vector,
+                                                     greedy_coverage_vector)
+                    greedy_coverage_vector, greedy_pred_probs, greedy_rnn_state, _ = greedy_output
                 else:
                     greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
                                                      greedy_rnn_state, greedy_prev_word_vector,
