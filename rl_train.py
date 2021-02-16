@@ -182,7 +182,7 @@ for epoch in range(1, rl_train_epochs + 1):
             loss, greedy_seqs, greedy_summaries = distributed_step(batch, 'rl_train')
             losses.append(loss)
 
-            if batch_n % 1 == 0:
+            if batch_n % 200 == 0:
                 # if True:
                 with tf.device('CPU'):
                     train_sums = list(tf.concat(greedy_seqs.values, axis=0).numpy())
