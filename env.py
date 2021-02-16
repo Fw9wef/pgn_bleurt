@@ -50,7 +50,7 @@ class Detokenize(layers.Layer):
         words = tf.where(oovs_mask == 1, oov_words, vocab_words)
         words = tf.where(loss_mask == 0, b'', words)
 
-        strings = tf.strings.join(words, separator=b' ')
+        strings = tf.strings.join(tf.transpose(words, [1, 0]), separator=b' ')
         strings = tf.strings.strip(strings)
         return strings, loss_mask
 
