@@ -58,7 +58,7 @@ class Detokenize(layers.Layer):
         words = tf.where(loss_mask == 0, b'', words)
         words = tf.where(bad_words_mask, b'', words)
 
-        strings = tf.strings.join(tf.transpose(words, [1, 0]), separator=b' ')
+        strings = tf.strings.reduce_join(words, axis=-1, separator=b' ')
         strings = tf.strings.strip(strings)
         return strings, loss_mask
 
