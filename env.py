@@ -16,7 +16,7 @@ class Detokenize(layers.Layer):
         self.end_id = vocab._word_to_id[SENTENCE_END]
         keys, values = [], []
         for key, value in vocab._id_to_word.items():
-            keys.append(key); values.append(key)
+            keys.append(key); values.append(value)
 
         keys = tf.constant(keys, dtype=tf.int32)
         values = tf.constant(values)
@@ -25,12 +25,18 @@ class Detokenize(layers.Layer):
 
     def call(self, input_seqs, oovs):
         oovs_mask = tf.where(input_seqs>self.vocab_size, 1, 0)
-        # pad_mask = tf.where(input_seqs==self.pad_id, 1, 0)
-        # todo pad_mask должна обнулять слова после токена end
-        loss_mask = tf.ones_like(input_seqs, dtype=tf.float32)
-        for sentence_n in range(loss_mask.shape[0]):
+        loss_mask = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
+        ones = tf.ones_like(input_seqs[0], dtype=tf.float32)
+        zeros = tf.zeros_like(input_seqs[0], dtype=tf.float32)
+        for sentence_n in range(input_seqs.shape[0]):
             ind_token_idx = tf.where(input_seqs[sentence_n] == self.end_id)[0]
-            loss_mask[sentence_n, ind_token_idx:] = 0.
+            if ind_token_idx.shape[0] == 0:
+                sentence_mask = ones
+            else:
+                end_token_idx = ind_token_idx[0, 0]
+                sentence_mask = tf.concat([ones[:end_token_idx], zeros[:end_token_idx]], axis=0)
+            loss_mask = loss_mask.write(sentence_n, sentence_mask)
+        loss_mask = loss_mask.stack()
 
         # get vocab words
         vocab_words = self.table.lookup(input_seqs)
