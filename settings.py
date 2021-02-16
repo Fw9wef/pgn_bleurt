@@ -10,5 +10,5 @@ summary_max_tokens = 120
 pretrain_epochs = 15
 rl_train_epochs = 10
 cover_loss_iters = 2000
-batch_size = 2
+batch_size = 3
 gpu_ids = [0, 1, 2, 3, 4, 5]
