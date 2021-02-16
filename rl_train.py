@@ -122,8 +122,8 @@ def rl_train_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, id
             gt_summary, gt_mask = detokenize(extended_gt_tokens, oovs)
             greedy_summary, greedy_mask = detokenize(greedy_seqs, oovs)
             sample_summary, sample_mask = detokenize(sample_seqs, oovs)
-            greedy_rewards = bleurt_scorer(gt_summary, greedy_summary)
-            sample_rewards = bleurt_scorer(gt_summary, sample_summary)
+            greedy_rewards = bleurt_scorer(gt_summary, greedy_summary)['predictions']
+            sample_rewards = bleurt_scorer(gt_summary, sample_summary)['predictions']
             print(greedy_rewards)
             delta_rewards = sample_rewards - greedy_rewards
 
