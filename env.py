@@ -12,8 +12,9 @@ class Detokenize(layers.Layer):
     def __init__(self, vocab, **kwargs):
         super(Detokenize, self).__init__(**kwargs)
         self.vocab_size = vocab.size()
-        self.pad_id = vocab._word_to_id[PAD_TOKEN]
-        self.end_id = vocab._word_to_id[SENTENCE_END]
+        self.end_id = vocab._word_to_id[STOP_DECODING]
+        self.bad_words = [vocab._word_to_id[x] for x in [SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN,
+                                                         PAD_TOKEN, START_DECODING, STOP_DECODING]]
         keys, values = [], []
         for key, value in vocab._id_to_word.items():
             keys.append(key); values.append(value)
@@ -38,6 +39,12 @@ class Detokenize(layers.Layer):
             loss_mask = loss_mask.write(sentence_n, sentence_mask)
         loss_mask = loss_mask.stack()
 
+        bad_words = tf.TensorArray(dtype=tf.bool, size=0, dynamic_size=True)
+        for i, bad_word_id in enumerate(self.bad_words):
+            bad_words = bad_words.write(i, input_seqs == bad_word_id)
+        bad_words = bad_words.stack()
+        bad_words_mask = tf.math.reduce_any(bad_words, axis=0)
+
         # get vocab words
         vocab_words = self.table.lookup(input_seqs)
         # get oov words
@@ -49,6 +56,7 @@ class Detokenize(layers.Layer):
 
         words = tf.where(oovs_mask == 1, oov_words, vocab_words)
         words = tf.where(loss_mask == 0, b'', words)
+        words = tf.where(bad_words_mask, b'', words)
 
         strings = tf.strings.join(tf.transpose(words, [1, 0]), separator=b' ')
         strings = tf.strings.strip(strings)

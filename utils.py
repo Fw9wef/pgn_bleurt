@@ -72,7 +72,7 @@ def save_examples(full_path_to_examples, articles, gt_summaries, summaries, epoc
         f.write(remove_bad_words(summaries[n]))
         if in_graph_decodings:
             f.write('\n' + '#' * 50 + '\n')
-            f.write(remove_bad_words(in_graph_decodings[n]))
+            f.write(in_graph_decodings[n])
 
 
 
