@@ -100,8 +100,8 @@ def pretrain_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, id
     grads = [tf.clip_by_norm(g, 2) for g in grads]
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
 
-    greedy_summary, greedy_mask = detokenize(greedy_seqs, oovs)
-    return loss, greedy_seqs, greedy_summary
+    #greedy_summary, greedy_mask = detokenize(greedy_seqs, oovs)
+    return loss, greedy_seqs
 
 
 def rl_train_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
@@ -132,7 +132,7 @@ def rl_train_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, id
     grads = tape.gradient(loss, model.trainable_weights)
     grads = [tf.clip_by_norm(g, 2) for g in grads]
     optimizer.apply_gradients(zip(grads, model.trainable_weights))
-    return loss, greedy_seqs, greedy_summary
+    return loss, greedy_seqs
 
 
 def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
@@ -143,8 +143,8 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     loss = tf.nn.compute_average_loss(ce_loss(extended_gt_tokens, greedy_probs, loss_mask),
                                       global_batch_size=global_batch_size)
 
-    greedy_summary, greedy_mask = detokenize(greedy_seqs, oovs)
-    return loss, greedy_seqs, greedy_summary
+    #greedy_summary, greedy_mask = detokenize(greedy_seqs, oovs)
+    return loss, greedy_seqs
 
 
 @tf.function
@@ -179,7 +179,7 @@ for epoch in range(1, rl_train_epochs + 1):
 
         batch = next(iterator)
         if check_shapes(batch):
-            loss, greedy_seqs, greedy_summaries = distributed_step(batch, 'rl_train')
+            loss, greedy_seqs = distributed_step(batch, 'rl_train')
             losses.append(loss)
 
             if batch_n % 200 == 0:
@@ -187,15 +187,15 @@ for epoch in range(1, rl_train_epochs + 1):
                 with tf.device('CPU'):
                     train_sums = list(tf.concat(greedy_seqs.values, axis=0).numpy())
                     train_inds = list(tf.concat(batch[-1].values, axis=0).numpy().squeeze())
-                    in_graph_decodings = tf.concat(greedy_summaries.values, axis=0).numpy()
-                    in_graph_decodings = [x.decode() for x in in_graph_decodings]
+                    #in_graph_decodings = tf.concat(greedy_summaries.values, axis=0).numpy()
+                    #in_graph_decodings = [x.decode() for x in in_graph_decodings]
 
                 articles = [article[x] for x in train_inds]
                 gt_summaries = [summary[x] for x in train_inds]
                 examples_oovs = [oovs[x] for x in train_inds]
                 scores, summaries, time_step_masks = env.get_rewards(gt_summaries, train_sums, examples_oovs)
                 save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'rl_train',
-                              in_graph_decodings=in_graph_decodings)
+                              in_graph_decodings=False)
                 save_scores(metrics_folder, scores, 'rl_train')
 
                 mean_epoch_loss = np.mean(losses)
@@ -209,21 +209,21 @@ for epoch in range(1, rl_train_epochs + 1):
                 val_iterator = iter(val_dist_dataset)
                 for val_batch_n in range(1, min(10, batches_per_epoch)):
                     batch = next(val_iterator)
-                    loss, greedy_seqs, greedy_summaries = distributed_step(batch, 'val')
+                    loss, greedy_seqs = distributed_step(batch, 'val')
                     val_losses.append(loss)
 
                     with tf.device('CPU'):
                         val_sums += list(tf.concat(greedy_seqs.values, axis=0).numpy())
                         val_inds += list(tf.concat(batch[-1].values, axis=0).numpy().squeeze())
-                        in_graph_decodings = tf.concat(greedy_summaries.values, axis=0).numpy()
-                        in_graph_decodings += [x.decode() for x in in_graph_decodings]
+                        #in_graph_decodings = tf.concat(greedy_summaries.values, axis=0).numpy()
+                        #in_graph_decodings += [x.decode() for x in in_graph_decodings]
 
                 articles = [val_article[x] for x in val_inds]
                 gt_summaries = [val_summary[x] for x in val_inds]
                 examples_oovs = [val_oovs[x] for x in val_inds]
                 scores, summaries, time_step_masks = env.get_rewards(gt_summaries, val_sums, examples_oovs)
                 save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'val',
-                              in_graph_decodings=in_graph_decodings)
+                              in_graph_decodings=False)
                 save_scores(metrics_folder, scores, 'val')
 
                 mean_epoch_loss = np.mean(val_losses)
