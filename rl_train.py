@@ -5,7 +5,7 @@ from model import PGN
 from env import Env, CELoss, RLLoss, Detokenize, BleurtLayer
 from tqdm import tqdm
 from utils import save_model, save_scores, save_loss, save_examples, make_dirs, check_shapes
-from settings import pretrain_epochs, batch_size, gpu_ids, checkpoints_folder, experiment_name, load_model_path
+from settings import rl_train_epochs, batch_size, gpu_ids, checkpoints_folder, experiment_name, load_model_path
 
 
 tf.debugging.set_log_device_placement(False)
@@ -79,9 +79,9 @@ with train_strategy.scope():
     model = PGN(vocab=vocab, max_oovs_in_text=max_oovs_in_text)
     if load_model_path:
         model.load_weights(load_model_path)
-    optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
-    ce_loss = CELoss(alpha=0.5)
-    rl_loss = RLLoss(alpha=0.5)
+    optimizer = tf.keras.optimizers.Adam(learning_rate=0.0005, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
+    ce_loss = CELoss(alpha=1-0.99)
+    rl_loss = RLLoss(alpha=0.99)
     detokenize = Detokenize(vocab)
     bleurt_scorer = BleurtLayer()
 
@@ -147,7 +147,7 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     return loss, greedy_seqs, greedy_summary
 
 
-#@tf.function
+@tf.function
 def distributed_step(dist_inputs, mode):
     if mode == 'train':
         per_replica_losses, greedy_seqs, greedy_summary = train_strategy.run(pretrain_step, args=(dist_inputs))
@@ -169,8 +169,8 @@ val_batches_per_epoch = len(val_tf_dataset)
 
 # tf.debugging.set_log_device_placement(True)
 
-for epoch in range(1, pretrain_epochs + 1):
-    new_learning_rate = 0.0005 - (0.0005 - 0.001) * (epoch - 1) / (pretrain_epochs - 1)
+for epoch in range(1, rl_train_epochs + 1):
+    new_learning_rate = 0.0005 - (0.0005 - 0.001) * (epoch - 1) / (rl_train_epochs- 1)
     optimizer.lr.assign(new_learning_rate)
     iterator = iter(train_dist_dataset)
     print('epoch', epoch)
@@ -205,6 +205,7 @@ for epoch in range(1, pretrain_epochs + 1):
                 val_losses = []
                 val_sums = []
                 val_inds = []
+                in_graph_decodings = []
                 val_iterator = iter(val_dist_dataset)
                 for val_batch_n in range(1, min(10, batches_per_epoch)):
                     batch = next(val_iterator)
@@ -215,7 +216,7 @@ for epoch in range(1, pretrain_epochs + 1):
                         val_sums += list(tf.concat(greedy_seqs.values, axis=0).numpy())
                         val_inds += list(tf.concat(batch[-1].values, axis=0).numpy().squeeze())
                         in_graph_decodings = tf.concat(greedy_summaries.values, axis=0).numpy()
-                        in_graph_decodings = [x.decode() for x in in_graph_decodings]
+                        in_graph_decodings += [x.decode() for x in in_graph_decodings]
 
                 articles = [val_article[x] for x in val_inds]
                 gt_summaries = [val_summary[x] for x in val_inds]
