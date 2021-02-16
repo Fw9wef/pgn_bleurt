@@ -170,7 +170,7 @@ val_batches_per_epoch = len(val_tf_dataset)
 # tf.debugging.set_log_device_placement(True)
 
 for epoch in range(1, rl_train_epochs + 1):
-    new_learning_rate = 0.0005 - (0.0005 - 0.001) * (epoch - 1) / (rl_train_epochs- 1)
+    new_learning_rate = 0.0005 - (0.0005 - 0.0001) * (epoch - 1) / (rl_train_epochs - 1)
     optimizer.lr.assign(new_learning_rate)
     iterator = iter(train_dist_dataset)
     print('epoch', epoch)
