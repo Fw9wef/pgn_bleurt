@@ -193,8 +193,7 @@ for epoch in range(1, rl_train_epochs + 1):
                 gt_summaries = [summary[x] for x in train_inds]
                 examples_oovs = [oovs[x] for x in train_inds]
                 scores, summaries, time_step_masks = env.get_rewards(gt_summaries, train_sums, examples_oovs)
-                save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'rl_train',
-                              in_graph_decodings=False)
+                save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'rl_train')
                 save_scores(metrics_folder, scores, 'rl_train')
 
                 mean_epoch_loss = np.mean(losses)
@@ -221,8 +220,7 @@ for epoch in range(1, rl_train_epochs + 1):
                 gt_summaries = [val_summary[x] for x in val_inds]
                 examples_oovs = [val_oovs[x] for x in val_inds]
                 scores, summaries, time_step_masks = env.get_rewards(gt_summaries, val_sums, examples_oovs)
-                save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'val',
-                              in_graph_decodings=False)
+                save_examples(examples_folder, articles, gt_summaries, summaries, epoch, batch_n, 'val')
                 save_scores(metrics_folder, scores, 'val')
 
                 mean_epoch_loss = np.mean(val_losses)

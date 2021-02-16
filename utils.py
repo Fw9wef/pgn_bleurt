@@ -58,7 +58,7 @@ def save_scores(full_path_to_metrics, scores, train_val='val'):
 
 
 def save_examples(full_path_to_examples, articles, gt_summaries, summaries, epoch, batch_n,
-                  train_val='val', in_graph_decodings=None):
+                  train_val='val', in_graph_decodings=False):
     new_dir_name = train_val + '_epoch_' + str(epoch) + '_batch_' + str(batch_n)
     path_to_dir = os.path.join(full_path_to_examples, new_dir_name)
     make_dir(path_to_dir)
