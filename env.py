@@ -5,7 +5,7 @@ from bleurt import score as bleurt_score
 from utils import remove_bad_words, lens_to_time_step_masks
 from utils import SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING
 from rouge_score import rouge_scorer
-from settings import bleurt_model
+from settings import bleurt_model, summary_max_tokens
 
 
 class Detokenize(layers.Layer):
@@ -48,9 +48,9 @@ class Detokenize(layers.Layer):
         # get vocab words
         vocab_words = self.table.lookup(input_seqs)
         # get oov words
-        oov_input_seqs = tf.where(input_seqs>self.vocab_size, input_seqs-self.vocab_size, 0)
+        oov_input_seqs = tf.where(input_seqs > self.vocab_size, input_seqs-self.vocab_size, 0)
         batch_inds = tf.expand_dims(tf.range(input_seqs.shape[0]), axis=-1)
-        batch_inds = tf.tile(batch_inds, [1, input_seqs.shape[1]])
+        batch_inds = tf.tile(batch_inds, [1, summary_max_tokens+1])
         indices = tf.stack([batch_inds, oov_input_seqs], axis=-1)
         oov_words = tf.gather_nd(oovs, indices)
 
@@ -158,9 +158,9 @@ class RLLoss(layers.Layer):
 
     def call(self, chosen_tokens, probs, time_step_mask, delta_rewards):
         batch_inds = tf.expand_dims(tf.range(probs.shape[0]), axis=1)
-        batch_inds = tf.tile(batch_inds, [1, probs.shape[1]])
+        batch_inds = tf.tile(batch_inds, [1, summary_max_tokens+1])
 
-        time_inds = tf.expand_dims(tf.range(probs.shape[1]), axis=0)
+        time_inds = tf.expand_dims(tf.range(summary_max_tokens+1), axis=0)
         time_inds = tf.tile(time_inds, [probs.shape[0], 1])
 
         inds = tf.stack([batch_inds, time_inds, chosen_tokens], axis=-1)
