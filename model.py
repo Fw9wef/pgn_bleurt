@@ -158,6 +158,7 @@ class Decoder(layers.Layer):
 
             for i in range(gt_tokens.shape[1]):
                 if self.decoding_mode == 'self_critic':
+                    global tape
                     with tape.stop_recording():
                         greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
                                                          greedy_rnn_state, greedy_prev_word_vector,
