@@ -102,15 +102,14 @@ def pretrain_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, id
     #greedy_summary, greedy_mask = detokenize(greedy_seqs, oovs)
     return loss, greedy_seqs
 
-tape = 0
+
 def rl_train_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     model.switch_decoding_mode('self_critic')
 
-    global tape
     with tf.GradientTape() as tape:
         greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses = model(extended_input_tokens,
                                                                                       extended_gt_tokens,
-                                                                                      training=True)
+                                                                                      training=True, tape=tape)
         loss = 0
 
         # computing cross entropy loss

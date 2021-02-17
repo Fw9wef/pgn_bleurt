@@ -141,7 +141,7 @@ class Decoder(layers.Layer):
                                       bahdanau_attention_units=bahdanau_attention_units,
                                       gen_prob_units=gen_prob_units, max_oovs_in_text=max_oovs_in_text)
 
-    def call(self, gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state):
+    def call(self, gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state, tape=None):
         if self.decoding_mode in ['self_critic', 'evaluate']:
             greedy_coverage_vector = tf.zeros(extended_input_tokens.shape)
             sample_coverage_vector = tf.zeros(extended_input_tokens.shape)
@@ -158,7 +158,6 @@ class Decoder(layers.Layer):
 
             for i in range(gt_tokens.shape[1]):
                 if self.decoding_mode == 'self_critic':
-                    global tape
                     with tape.stop_recording():
                         greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
                                                          greedy_rnn_state, greedy_prev_word_vector,
@@ -254,7 +253,7 @@ class PGN(tf.keras.models.Model):
         self.decoding_mode = mode
         self.decoder.decoding_mode = mode
 
-    def call(self, extended_input_tokens, extended_gt_tokens):
+    def call(self, extended_input_tokens, extended_gt_tokens, tape=None):
 
         input_tokens = tf.where(extended_input_tokens >= self.vocab_size, self.unk_token, extended_input_tokens)
         gt_tokens = tf.where(extended_gt_tokens >= self.vocab_size, self.unk_token, extended_gt_tokens)
@@ -262,7 +261,7 @@ class PGN(tf.keras.models.Model):
         rnn_state, enc_output, enc_attn = self.encoder(input_tokens)
 
         if self.decoding_mode in ['self_critic', 'evaluate']:
-            decoder_outputs = self.decoder(gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state)
+            decoder_outputs = self.decoder(gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state, tape=tape)
             greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses = decoder_outputs
             return greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses
 
