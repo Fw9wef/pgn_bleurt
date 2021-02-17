@@ -25,19 +25,11 @@ class Detokenize(layers.Layer):
         self.table = tf.lookup.StaticHashTable(init, default_value=UNKNOWN_TOKEN)
 
     def call(self, input_seqs, oovs):
-        oovs_mask = tf.where(input_seqs>self.vocab_size, 1, 0)
-        loss_mask = tf.TensorArray(dtype=tf.float32, size=0, dynamic_size=True)
-        ones = tf.ones_like(input_seqs[0], dtype=tf.float32)
-        zeros = tf.zeros_like(input_seqs[0], dtype=tf.float32)
-        for sentence_n in range(input_seqs.shape[0]):
-            end_token_idx = tf.where(input_seqs[sentence_n] == self.end_id)
-            if end_token_idx.shape[0] == 0:
-                sentence_mask = ones
-            else:
-                token_idx = end_token_idx[0, 0] + 1
-                sentence_mask = tf.concat([ones[:token_idx], zeros[token_idx:]], axis=0)
-            loss_mask = loss_mask.write(sentence_n, sentence_mask)
-        loss_mask = loss_mask.stack()
+        oovs_mask = tf.where(input_seqs > self.vocab_size, 1, 0)
+        loss_mask = tf.where(input_seqs == self.end_id, 1, 0)
+        loss_mask = tf.cumsum(loss_mask, axis=1, exclusive=True)
+        loss_mask = tf.where(loss_mask == 0, 1, 0)
+        loss_mask = tf.cast(loss_mask, tf.float32)
 
         bad_words = tf.TensorArray(dtype=tf.bool, size=0, dynamic_size=True)
         for i, bad_word_id in enumerate(self.bad_words):
