@@ -86,7 +86,6 @@ with train_strategy.scope():
     bleurt_scorer = BleurtLayer()
 
 
-
 # def train_step(inputs):
 def pretrain_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     model.switch_decoding_mode('cross_entropy')
@@ -107,6 +106,7 @@ def pretrain_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, id
 def rl_train_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     model.switch_decoding_mode('self_critic')
 
+    global tape
     with tf.GradientTape() as tape:
         greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses = model(extended_input_tokens,
                                                                                       extended_gt_tokens,
@@ -147,7 +147,7 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     return loss, greedy_seqs
 
 
-@tf.function
+#@tf.function
 def distributed_step(dist_inputs, mode):
     if mode == 'train':
         per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))

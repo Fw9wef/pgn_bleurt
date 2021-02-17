@@ -179,7 +179,7 @@ class Data:
 
         def generator():
             np.random.shuffle(all_files)  ###############
-            for file in tqdm(all_files):  ###############
+            for file in tqdm(all_files[:1]):  ###############
                 reader = open(file, 'rb')  ##############
                 while True:
                     len_bytes = reader.read(8)
