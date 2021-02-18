@@ -125,17 +125,18 @@ class Data:
             extended_tokenized_article = [start_decoding]
 
             for w in article_words:
-                tokenized_article.append(vocab.word2id(w))
-                if vocab.word2id(w) == vocab.UNKid:
-                    if w in oovs2id.keys():
-                        extended_tokenized_article.append(oovs2id[w])
+                if w not in [SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING]:
+                    tokenized_article.append(vocab.word2id(w))
+                    if vocab.word2id(w) == vocab.UNKid:
+                        if w in oovs2id.keys():
+                            extended_tokenized_article.append(oovs2id[w])
+                        else:
+                            oovs2id[w] = oovs_id
+                            id2oovs[oovs_id] = w
+                            oovs_id += 1
+                            extended_tokenized_article.append(oovs2id[w])
                     else:
-                        oovs2id[w] = oovs_id
-                        id2oovs[oovs_id] = w
-                        oovs_id += 1
-                        extended_tokenized_article.append(oovs2id[w])
-                else:
-                    extended_tokenized_article.append(vocab.word2id(w))
+                        extended_tokenized_article.append(vocab.word2id(w))
 
             extended_tokenized_article += [stop_decoding] + [pad_token for i in
                                                              range(max_article_len - len(article_words))]
@@ -151,14 +152,15 @@ class Data:
             extended_tokenized_summary = [start_decoding]
 
             for w in summary_words:
-                tokenized_summary.append(vocab.word2id(w))
-                if vocab.word2id(w) == vocab.UNKid:
-                    if w in oovs2id.keys():
-                        extended_tokenized_summary.append(oovs2id[w])
+                if w not in [SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING]:
+                    tokenized_summary.append(vocab.word2id(w))
+                    if vocab.word2id(w) == vocab.UNKid:
+                        if w in oovs2id.keys():
+                            extended_tokenized_summary.append(oovs2id[w])
+                        else:
+                            extended_tokenized_summary.append(vocab.UNKid)
                     else:
-                        extended_tokenized_summary.append(vocab.UNKid)
-                else:
-                    extended_tokenized_summary.append(vocab.word2id(w))
+                        extended_tokenized_summary.append(vocab.word2id(w))
 
             extended_tokenized_summary += [stop_decoding] + [pad_token for i in
                                                              range(max_summary_len - len(summary_words))]

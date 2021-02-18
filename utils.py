@@ -27,8 +27,8 @@ def lens_to_time_step_masks(lens, max_len):
     return masks
 
 
-def save_model(model, full_path_to_checkpoints, epoch, batch_n):
-    model.save_weights(os.path.join(full_path_to_checkpoints, 'pgn_epoch_' + str(epoch) + '_batch_' + str(batch_n)),
+def save_model(model, full_path_to_checkpoints, epoch, batch_n, stage='pretrain'):
+    model.save_weights(os.path.join(full_path_to_checkpoints, 'pgn_' + str(stage) + '_epoch_' + str(epoch) + '_batch_' + str(batch_n)),
                        overwrite=True)
 
 
@@ -58,8 +58,8 @@ def save_scores(full_path_to_metrics, scores, train_val='val'):
 
 
 def save_examples(full_path_to_examples, articles, gt_summaries, summaries, epoch, batch_n,
-                  train_val='val', in_graph_decodings=False):
-    new_dir_name = train_val + '_epoch_' + str(epoch) + '_batch_' + str(batch_n)
+                  train_val='val', stage='pretrain', in_graph_decodings=False):
+    new_dir_name = str(stage) + '_' + train_val + '_epoch_' + str(epoch) + '_batch_' + str(batch_n)
     path_to_dir = os.path.join(full_path_to_examples, new_dir_name)
     make_dir(path_to_dir)
     for i, n in enumerate(np.random.choice(len(articles), min(10, len(articles)), replace=False)):

@@ -120,6 +120,9 @@ class CELoss(layers.Layer):
         super(CELoss, self).__init__(name=layer_name)
         self.alpha = alpha
 
+    def set_alpha(self, alpha):
+        self.alpha = alpha
+
     def call(self, gt, probs, time_step_mask):
         # probs.shape = (batch, seqlen, classes)
         gt, probs, time_step_mask = gt[:, 1:], probs[:, :-1], time_step_mask[:, 1:]
@@ -146,6 +149,9 @@ class CoverLoss(layers.Layer):
 class RLLoss(layers.Layer):
     def __init__(self, alpha=1., layer_name='rl_loss'):
         super(RLLoss, self).__init__(name=layer_name)
+        self.alpha = alpha
+
+    def set_alpha(self, alpha):
         self.alpha = alpha
 
     def call(self, chosen_tokens, probs, time_step_mask, delta_rewards):
