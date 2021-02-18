@@ -6,6 +6,7 @@ import tensorflow as tf
 from tqdm import tqdm
 from tensorflow.train import Example
 from utils import SENTENCE_START, SENTENCE_END, UNKNOWN_TOKEN, PAD_TOKEN, START_DECODING, STOP_DECODING
+from utils import remove_bad_words
 from settings import vocab_file, vocab_size, data_folder, article_max_tokens, summary_max_tokens
 
 
@@ -114,6 +115,7 @@ class Data:
 
         def tokenizer(article, summary, max_article_len, max_summary_len):
             # tokenize article
+            article = remove_bad_words(article)
             article_words = article.split()
             if len(article_words) > max_article_len:
                 article_words = article_words[:max_article_len]
@@ -143,6 +145,7 @@ class Data:
             tokenized_article += [stop_decoding] + [pad_token for i in range(max_article_len - len(article_words))]
 
             # tokenize summary
+            summary = remove_bad_words(summary)
             summary_words = summary.split()
             if len(summary_words) > max_summary_len:
                 summary_words = summary_words[:max_summary_len]
