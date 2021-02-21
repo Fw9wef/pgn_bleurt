@@ -1,7 +1,6 @@
 import tensorflow as tf
 from tensorflow.keras import layers
 import tensorflow_probability as tfp
-# from contextvars import ContextVar
 
 
 class Encoder(layers.Layer):

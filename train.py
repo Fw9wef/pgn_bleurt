@@ -275,7 +275,7 @@ for epoch in range(1, rl_train_epochs + 1):
                 val_iterator = iter(val_dist_dataset)
                 for val_batch_n in range(1, min(10, batches_per_epoch)):
                     batch = next(val_iterator)
-                    loss, greedy_seqs, _ = distributed_step(batch, 'rl_val')
+                    loss, greedy_seqs, _ = distributed_step(batch, 'val')
                     val_losses.append(loss)
 
                     with tf.device('CPU'):

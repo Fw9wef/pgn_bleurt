@@ -1,5 +1,4 @@
 import os
-import glob
 import struct
 import numpy as np
 import tensorflow as tf
