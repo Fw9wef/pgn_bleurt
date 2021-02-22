@@ -265,6 +265,7 @@ class Decoder(layers.Layer):
                 beam_top_k_vals, beam_top_k_inds = tf.math.top_k(new_cumulative_seq_logits, k=self.beam_width)
                 cumulative_seq_logits.assign(beam_top_k_vals)
                 batch_base_inds = tf.constant([i*self.beam_width for i in range(batch_size)])
+                batch_base_inds = tf.repeat(batch_base_inds, self.beam_width, axis=0)
                 beam_inds = tf.math.floordiv(beam_top_k_inds, extended_vocab_size)
                 seq_inds = batch_base_inds + tf.reshape(beam_inds, [-1])
                 greedy_coverage_vector = tf.gather(greedy_coverage_vector, seq_inds)
