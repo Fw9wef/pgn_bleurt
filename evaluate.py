@@ -5,7 +5,7 @@ from model import PGN
 from env import Env, CELoss, RLLoss, Detokenize, BleurtLayer
 from tqdm import tqdm
 from utils import save_model, save_scores, save_loss, save_examples, make_dirs, check_shapes
-from settings import rl_train_epochs, pretrain_epochs, batch_size, gpu_ids, checkpoints_folder, experiment_name, load_model_path
+from settings import rl_train_epochs, pretrain_epochs, batch_size, gpu_ids, checkpoints_folder, experiment_name, load_model_path, beam_width
 
 assert load_model_path, 'Model path must be specified during testing'
 
@@ -57,7 +57,7 @@ print('Max oovs in text :', max_oovs_in_text)
 #################################################################################################
 
 with train_strategy.scope():
-    model = PGN(vocab=vocab, max_oovs_in_text=max_oovs_in_text)
+    model = PGN(vocab=vocab, max_oovs_in_text=max_oovs_in_text, beam_width=beam_width)
     model.load_weights(load_model_path)
 
 
@@ -96,4 +96,4 @@ scores, summaries, time_step_masks = env.get_rewards(gt_summaries, val_sums, exa
 save_examples(examples_folder, articles, gt_summaries, summaries, 'NA', 'NA', 'test', stage='beam')
 save_scores(metrics_folder, scores, 'beam_test')
 
-print("Training complete:)")
+print("Testing complete:)")
