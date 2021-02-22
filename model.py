@@ -240,7 +240,9 @@ class Decoder(layers.Layer):
             greedy_prev_word_vector = self.dec_emb(gt_tokens[:, :1])
             greedy_prev_word_vector = tf.repeat(greedy_prev_word_vector, self.beam_width, axis=0)
             greedy_rnn_state = rnn_state
+            print(greedy_rnn_state.shape)
             greedy_rnn_state = tf.repeat(greedy_rnn_state, self.beam_width, axis=0)
+            print(greedy_rnn_state.shape)
             greedy_coverage_vector = tf.zeros(extended_input_tokens.shape)
             greedy_coverage_vector = tf.repeat(greedy_coverage_vector, self.beam_width, axis=0)
             extended_input_tokens = tf.repeat(extended_input_tokens, self.beam_width, axis=0)
