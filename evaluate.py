@@ -67,7 +67,7 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
     return greedy_seqs
 
 
-@tf.function
+#@tf.function
 def distributed_step(dist_inputs):
     per_replica_losses, greedy_seqs = train_strategy.run(eval_step, args=(dist_inputs))
     return train_strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_losses, axis=None), greedy_seqs
