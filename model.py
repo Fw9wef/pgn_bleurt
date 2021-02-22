@@ -282,9 +282,10 @@ class Decoder(layers.Layer):
 
             greedy_seqs = tf.transpose(greedy_seqs.stack(), [1, 0])
             greedy_seqs = tf.reshape(greedy_seqs, [batch_size, self.beam_width, -1])
-            batch_inds = tf.constant([i for i in range(batch_size)])
+            batch_inds = tf.constant([i for i in range(batch_size)], dtype=tf.int32)
             batch_inds = tf.expand_dims(batch_inds, axis=-1)
             best_beam_inds = tf.argmax(cumulative_seq_logits, axis=-1)
+            best_beam_inds = tf.cast(best_beam_inds, tf.int32)
             best_beam_inds = tf.expand_dims(best_beam_inds, axis=-1)
             best_seqs_inds = tf.concat([batch_inds, best_beam_inds], axis=-1)
 
