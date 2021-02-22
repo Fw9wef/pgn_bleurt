@@ -233,7 +233,6 @@ class Decoder(layers.Layer):
         elif self.decoding_mode == 'beam_search':
             # gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state
             batch_size = extended_input_tokens.shape[0]
-            new_output_shape = tf.constant(extended_input_tokens.shape[0], -1)
             cumulative_seq_logits = tf.Variable(tf.zeros([batch_size, self.beam_width]),
                                                  trainable=False, dtype=tf.float32)
             greedy_seqs = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
