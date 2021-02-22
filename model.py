@@ -239,11 +239,8 @@ class Decoder(layers.Layer):
 
             greedy_prev_word_vector = self.dec_emb(gt_tokens[:, :1])
             greedy_prev_word_vector = tf.repeat(greedy_prev_word_vector, self.beam_width, axis=0)
-            print(rnn_state)
-            greedy_rnn_state = rnn_state
-            print(greedy_rnn_state.shape)
-            greedy_rnn_state = tf.repeat(greedy_rnn_state, self.beam_width, axis=0)
-            print(greedy_rnn_state.shape)
+            greedy_rnn_state = tf.repeat(rnn_state[0], self.beam_width, axis=0),\
+                               tf.repeat(rnn_state[1], self.beam_width, axis=0)
             greedy_coverage_vector = tf.zeros(extended_input_tokens.shape)
             greedy_coverage_vector = tf.repeat(greedy_coverage_vector, self.beam_width, axis=0)
             extended_input_tokens = tf.repeat(extended_input_tokens, self.beam_width, axis=0)
@@ -270,11 +267,13 @@ class Decoder(layers.Layer):
                 batch_base_inds = tf.constant([i*self.beam_width for i in range(batch_size)])
                 beam_inds = tf.math.floordiv(beam_top_k_inds, extended_vocab_size)
                 seq_inds = batch_base_inds + tf.reshape(beam_inds, [-1])
+                greedy_coverage_vector = tf.gather(greedy_coverage_vector, seq_inds)
+                greedy_rnn_state = tf.gather(greedy_rnn_state[0], seq_inds), tf.gather(greedy_rnn_state[1], seq_inds)
 
                 seqs = greedy_seqs.stack()
                 seqs = tf.transpose(seqs, [1, 0])
                 new_seqs = tf.gather(seqs, seq_inds)
-                new_seqs = tf.transpose(seqs, [1, 0])
+                new_seqs = tf.transpose(new_seqs, [1, 0])
                 greedy_seqs = greedy_seqs.unstack(new_seqs)
 
                 token_inds = tf.math.floormod(beam_top_k_inds, extended_vocab_size)
