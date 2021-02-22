@@ -229,7 +229,7 @@ class Decoder(layers.Layer):
             coverage_losses = tf.transpose(coverage_losses.stack(), [1, 0])
 
             return probs, greedy_seqs, coverage_losses
-'''
+
         elif self.decoding_mode == 'beam_search':
             # gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state
             batch_size = extended_input_tokens.shape[0]
@@ -288,7 +288,7 @@ class Decoder(layers.Layer):
 
             best_seqs = tf.gather_nd(greedy_seqs, best_seqs_inds)
             return best_seqs
-'''
+
 
 class PGN(tf.keras.models.Model):
     # class PGN(layers.Layer):
