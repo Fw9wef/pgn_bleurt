@@ -69,8 +69,8 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
 
 # @tf.function
 def distributed_step(dist_inputs):
-    per_replica_losses, greedy_seqs = train_strategy.run(eval_step, args=(dist_inputs))
-    return train_strategy.reduce(tf.distribute.ReduceOp.MEAN, per_replica_losses, axis=None), greedy_seqs
+    greedy_seqs = train_strategy.run(eval_step, args=(dist_inputs))
+    return greedy_seqs
 
 
 env = Env(data=val_data, bleurt_device='cpu')
