@@ -233,8 +233,7 @@ class Decoder(layers.Layer):
         elif self.decoding_mode == 'beam_search':
             # gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state
             batch_size = extended_input_tokens.shape[0]
-            cumulative_seq_logits = tf.Variable(tf.zeros([batch_size, self.beam_width]),
-                                                 trainable=False, dtype=tf.float32)
+            cumulative_seq_logits = tf.zeros([batch_size, self.beam_width], dtype=tf.float32)
             greedy_seqs = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
 
             greedy_prev_word_vector = self.dec_emb(gt_tokens[:, :1])
@@ -263,7 +262,7 @@ class Decoder(layers.Layer):
                 new_cumulative_seq_logits = tf.reshape(new_cumulative_seq_logits, [batch_size, -1])
 
                 beam_top_k_vals, beam_top_k_inds = tf.math.top_k(new_cumulative_seq_logits, k=self.beam_width)
-                cumulative_seq_logits.assign(beam_top_k_vals)
+                cumulative_seq_logits = beam_top_k_vals
                 batch_base_inds = tf.constant([i*self.beam_width for i in range(batch_size)])
                 batch_base_inds = tf.repeat(batch_base_inds, self.beam_width, axis=0)
                 beam_inds = tf.math.floordiv(beam_top_k_inds, extended_vocab_size)
