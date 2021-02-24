@@ -62,7 +62,7 @@ with train_strategy.scope():
 
 
 def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, oovs, idx):
-    model.switch_decoding_mode('self_critic')
+    model.switch_decoding_mode('evaluate')
     _, _, greedy_seqs, _, _ = model(extended_input_tokens, extended_gt_tokens, training=False)
     return greedy_seqs
 
