@@ -27,7 +27,7 @@ train_strategy = tf.distribute.MirroredStrategy(devices=devices)
 
 
 #################################################################################################
-# LOADING DATA
+# Загрузка данных
 #################################################################################################
 
 # Loading TRAIN data
@@ -72,7 +72,7 @@ print('Max oovs in text :', max_oovs_in_text)
 
 
 #################################################################################################
-# DEFINE MULTIGPU TRAIN STEP FUNCTIONS
+#  Создаем модель и слои ошибок, определяем функцию для распределенного обучения
 #################################################################################################
 
 with train_strategy.scope():
@@ -185,7 +185,6 @@ for epoch in range(1, pretrain_epochs + 1):
             losses.append(loss)
 
         if batch_n % 200 == 0:
-            # if True:
             with tf.device('CPU'):
                 train_sums = list(tf.concat(greedy_seqs.values, axis=0).numpy())
                 train_inds = list(tf.concat(batch[-1].values, axis=0).numpy().squeeze())
@@ -249,7 +248,6 @@ for epoch in range(1, rl_train_epochs + 1):
             losses.append(loss)
 
             if batch_n % 200 == 0:
-                # if True:
                 with tf.device('CPU'):
                     train_sums = list(tf.concat(greedy_seqs.values, axis=0).numpy())
                     train_inds = list(tf.concat(batch[-1].values, axis=0).numpy().squeeze())
@@ -281,8 +279,6 @@ for epoch in range(1, rl_train_epochs + 1):
                     with tf.device('CPU'):
                         val_sums += list(tf.concat(greedy_seqs.values, axis=0).numpy())
                         val_inds += list(tf.concat(batch[-1].values, axis=0).numpy().squeeze())
-                        #in_graph_decodings = tf.concat(greedy_summaries.values, axis=0).numpy()
-                        #in_graph_decodings += [x.decode() for x in in_graph_decodings]
 
                 articles = [val_article[x] for x in val_inds]
                 gt_summaries = [val_summary[x] for x in val_inds]
@@ -298,5 +294,3 @@ for epoch in range(1, rl_train_epochs + 1):
             save_model(model, model_checkpoints, epoch, batch_n, stage='RL')
 
     save_model(model, model_checkpoints, epoch, 'last', stage='RL')
-
-print("Training complete:)")

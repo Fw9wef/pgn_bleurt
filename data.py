@@ -76,18 +76,16 @@ class Vocab(object):
 
 class Data:
     """
-    Dataset class for creating generator object for tf.data.Dataset class from generator
+    Класс датасета для создания объекта tf.data.Dataset из генератора
     """
-    def __init__(self, path_to_data=data_folder, mode='train' , vocab = None):
+    def __init__(self, path_to_data=data_folder, mode='train', vocab=None):
         """
-        Creates a DataGen class object.
-
         Args:
-            path_to_data: path to data chunks (see more https://github.com/abisee/cnn-dailymail)
-            vocab: Vocab class object for performing tokenization
-            mode: specifies train or test chunks will be loaded
+            path_to_data: путь к папке с данными
+            vocab: объект класса Vocab
+            mode: тип загружаемых объектов ('train', 'val', 'test')
         """
-        assert mode in ['train', 'test', 'val'], 'invald DataGen mode'
+        assert mode in ['train', 'test', 'val'], 'invald Data mode'
         self.mode = mode
         if mode == 'train':
             self.list_of_files = [os.path.join(path_to_data, x) for x in os.listdir(path_to_data) \
@@ -106,6 +104,11 @@ class Data:
         self.stop_decoding = self.vocab.word2id(STOP_DECODING)
 
     def get_tokenizer(self):
+        """
+        Создает функцию токенизатор с заданными гиперпараметрами
+        Return:
+            tokenizer: функция токенизации
+        """
         vocab = self.vocab
         start_decoding = vocab.word2id(START_DECODING)
         stop_decoding = vocab.word2id(STOP_DECODING)
@@ -113,7 +116,18 @@ class Data:
         pad_token = vocab.word2id(PAD_TOKEN)
 
         def tokenizer(article, summary, max_article_len, max_summary_len):
-            # tokenize article
+            """
+            Функция токенизатор. Токенезирует пару текст-резюме и создает общий для них список OOV слов
+            Params:
+                article: str: текст
+                summary: str: резюме
+                max_article_len: int: максимальная длина текста
+                max_summary_len: int: максимальная длина резюме
+            Return:
+                extended_tokenized_article: list: последовательность токенов текста, закодированная с использованием oov слов
+                extended_tokenized_summary: list: последовательность токенов резюме, закодированная с использованием  oov слов
+                id2oovs: dict: словарь с oov словами. Позволяет получить слово по ключу > размер словаря
+            """
             article = remove_bad_words(article)
             article_words = article.split()
             if len(article_words) > max_article_len:
@@ -173,18 +187,41 @@ class Data:
         return tokenizer
 
     def extract_text_data(self, tf_example):
+        """
+        Извлекает текстовую информацию из объектов класса tf.train.Example
+        Params:
+            tf_example: tf.train.Example объект с данными
+        Return:
+            article: str: текст
+            summary: str: резюме
+        """
         article = tf_example.features.feature['article'].bytes_list.value[0].decode("utf-8")
         summary = tf_example.features.feature['abstract'].bytes_list.value[0].decode("utf-8")
         return article, summary
 
     def get_generator(self, max_article_len=article_max_tokens, max_summary_len=summary_max_tokens):
+        """
+        Функция возвращает генератор данных с заданными гиперпараметрами.
+        Return:
+            generator: генератор данных
+        """
         all_files = self.list_of_files
         text_tokenizer = self.get_tokenizer()
 
         def generator():
-            np.random.shuffle(all_files)  ###############
-            for file in tqdm(all_files):  ###############
-                reader = open(file, 'rb')  ##############
+            """
+            Генератор данных. Считывает данные из папки и токенезирует их
+            Yield:
+                dict:
+                    'article_text' - текст
+                    'extended_article_tokens' - tf.Tensor: последовательность токенов текста, закодированных с использование oov слов
+                    'summary_text' - резюме
+                    'extended_summary_tokens' - tf.Tensor: последовательность токенов резюме, закодированных с использование oov слов
+                    'oovs' - словарь id2word для oov слов пары текст-резюме
+            """
+            np.random.shuffle(all_files)
+            for file in tqdm(all_files):
+                reader = open(file, 'rb')
                 while True:
                     len_bytes = reader.read(8)
                     if not len_bytes: break
@@ -210,7 +247,14 @@ class Data:
         return generator
 
     def detokenize(self, tokens_list, oovs_dict):
-        # print(tokens_list.shape, np.max(tokens_list), np.argmax(tokens_list), oovs_dict.keys())
+        """
+        Метод для детокенизации последовательностей. Не работает в графовом режиме.
+        Params:
+            tokens_list: list: последовательность токенов, закодированных с использованием oov слов (есть индексы > размера словаря)
+            oovs_dict: dict: id2word словарь oov слов
+        Return:
+            text: декодированный текст/резюме
+        """
         list_of_words = []
         for t in tokens_list:
 
@@ -228,7 +272,23 @@ class Data:
         text = ' '.join(list_of_words)
         return text
 
-    def get_all_data(self, get_tensor_dict=False):
+    def get_all_data(self):
+        """
+        Считывает и загружает в оперативную память все имеющиеся данные
+        ('train', 'val' или 'test' зависит от параметра mode при инициализации)
+        Return:
+            dict:
+                'article_text' - list: текст
+                'extended_article_tokens' - tf.Tensor: последовательность токенов текста, закодированных с использование oov слов
+                'summary_text' - list: резюме
+                'extended_summary_tokens'- tf.Tensor: последовательность токенов резюме, закодированных с использование oov слов
+                'summary_loss_points' - tf.Tensor: маска пэддингов для гт резюме
+                'index' - tf.Tensor: порядковый номер единицы данных
+                'oovs' - list: словари id2words для OOV слов
+                'tensor_oovs' - tf.Tensor: тензор с OOV словами, упорядоченными в порядке возрастания ключей
+
+            Все тензоры словаря итерируется по нулевой координате по данным. Списки также итерируются по данным.
+        """
         article_text = []
         # article_tokens = []
         extended_article_tokens = []
@@ -241,24 +301,17 @@ class Data:
         with tf.device('CPU'):
             for instance in data_gen():
                 article_text.append(instance['article_text'])
-                # article_tokens.append(instance['article_tokens'])
                 extended_article_tokens.append(instance['extended_article_tokens'])
                 summary_text.append(instance['summary_text'])
-                # summary_tokens.append(instance['summary_tokens'])
                 extended_summary_tokens.append(instance['extended_summary_tokens'])
                 oovs.append(instance['oovs'])
 
-            # article_tokens = tf.stack(article_tokens, axis=0)
             extended_article_tokens = tf.stack(extended_article_tokens, axis=0)
-            # summary_tokens = tf.stack(summary_tokens, axis=0)
             extended_summary_tokens = tf.stack(extended_summary_tokens, axis=0)
 
-            # article_lens = tf.where(extended_article_tokens == self.stop_decoding)[:, 1]
             summary_lens = tf.where(extended_summary_tokens == self.stop_decoding)[:, 1]
 
-            # article_tokens = article_tokens[:,:-1]
             extended_article_tokens = extended_article_tokens[:, :-1]
-            # summary_tokens = summary_tokens[:,:-1]
             extended_summary_tokens = extended_summary_tokens[:, :-1]
 
             summary_max_len = extended_summary_tokens.shape[1]
@@ -269,7 +322,7 @@ class Data:
             index = tf.constant([i for i in range(extended_article_tokens.shape[0])], dtype=tf.int32)
             index = tf.expand_dims(index, axis=1)
 
-            # get oovs in tf.Tensor object
+            # для декодирования в графовом режиме обернем oovs словарь в тензор
             max_oovs = 0
             for oov in oovs:
                 curr_oov_size = len(oov)
@@ -285,15 +338,11 @@ class Data:
                 tensor_oovs.append(oov_tensor)
             tensor_oovs = tf.stack(tensor_oovs, axis=0)
 
-
         return {'article_text': article_text,
-                # 'article_tokens':article_tokens,
                 'extended_article_tokens': extended_article_tokens,
                 'summary_text': summary_text,
-                # 'summary_tokens':summary_tokens,
                 'extended_summary_tokens': extended_summary_tokens,
                 'summary_loss_points': summary_loss_points,
                 'index': index,
                 'oovs': oovs,
-                'tensor_oovs': tensor_oovs
-                }
+                'tensor_oovs': tensor_oovs}

@@ -2,10 +2,10 @@ import numpy as np
 import tensorflow as tf
 from data import Data
 from model import PGN
-from env import Env, CELoss, RLLoss, Detokenize, BleurtLayer
+from env import Env
 from tqdm import tqdm
-from utils import save_model, save_scores, save_loss, save_examples, make_dirs, check_shapes
-from settings import rl_train_epochs, pretrain_epochs, batch_size, gpu_ids, checkpoints_folder, experiment_name, load_model_path, beam_width
+from utils import save_scores, save_examples, make_dirs, check_shapes
+from settings import batch_size, gpu_ids, checkpoints_folder, experiment_name, load_model_path
 
 assert load_model_path, 'Model path must be specified during testing'
 
@@ -28,10 +28,10 @@ train_strategy = tf.distribute.MirroredStrategy(devices=devices)
 
 
 #################################################################################################
-# LOADING DATA
+# Загрузка данных
 #################################################################################################
 
-val_data = Data(mode='val')
+val_data = Data(mode='test')
 vocab = val_data.vocab
 val_full_dataset = val_data.get_all_data()
 val_article = val_full_dataset['article_text']
@@ -53,11 +53,11 @@ print('Max oovs in text :', max_oovs_in_text)
 
 
 #################################################################################################
-# DEFINE MULTIGPU TRAIN STEP FUNCTIONS
+# Создаем модель, определяем функцию для распределенной генерации резюме
 #################################################################################################
 
 with train_strategy.scope():
-    model = PGN(vocab=vocab, max_oovs_in_text=max_oovs_in_text, beam_width=beam_width)
+    model = PGN(vocab=vocab, max_oovs_in_text=max_oovs_in_text)
     model.load_weights(load_model_path)
 
 
@@ -93,7 +93,5 @@ articles = [val_article[x] for x in val_inds]
 gt_summaries = [val_summary[x] for x in val_inds]
 examples_oovs = [val_oovs[x] for x in val_inds]
 scores, summaries, time_step_masks = env.get_rewards(gt_summaries, val_sums, examples_oovs)
-save_examples(examples_folder, articles, gt_summaries, summaries, 'NA', 'NA', 'test', stage='beam')
-save_scores(metrics_folder, scores, 'beam_test')
-
-print("Testing complete:)")
+save_examples(examples_folder, articles, gt_summaries, summaries, 'NA', 'NA', 'test', stage='test')
+save_scores(metrics_folder, scores, 'test')

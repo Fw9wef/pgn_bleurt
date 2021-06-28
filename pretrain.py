@@ -2,7 +2,7 @@ import numpy as np
 import tensorflow as tf
 from data import Data
 from model import PGN
-from env import Env, CELoss, RLLoss
+from env import Env, CELoss
 from tqdm import tqdm
 from utils import save_model, save_scores, save_loss, save_examples, make_dirs, check_shapes
 from settings import pretrain_epochs, batch_size, gpu_ids, checkpoints_folder, experiment_name
@@ -27,7 +27,7 @@ train_strategy = tf.distribute.MirroredStrategy(devices=devices)
 
 
 #################################################################################################
-# LOADING DATA
+# Загрузка данных
 #################################################################################################
 
 # Loading TRAIN data
@@ -70,14 +70,13 @@ print('Max oovs in text :', max_oovs_in_text)
 
 
 #################################################################################################
-# DEFINE MULTIGPU TRAIN STEP FUNCTIONS
+# Создаем модель и слои ошибок, определяем функцию для распределенного обучения
 #################################################################################################
 
 with train_strategy.scope():
     model = PGN(vocab=vocab, max_oovs_in_text=max_oovs_in_text)
     optimizer = tf.keras.optimizers.Adam(learning_rate=0.001, beta_1=0.9, beta_2=0.98, epsilon=1e-9)
     ce_loss = CELoss(alpha=1.)
-    rl_loss = RLLoss
 
 
 # def train_step(inputs):
@@ -88,26 +87,6 @@ def pretrain_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
         gt_probs, greedy_seqs, coverage_losses = model(extended_input_tokens, extended_gt_tokens, training=True)
         loss = tf.nn.compute_average_loss(ce_loss(extended_gt_tokens, gt_probs, loss_mask),
                                           global_batch_size=global_batch_size)
-
-    grads = tape.gradient(loss, model.trainable_weights)
-    grads = [tf.clip_by_norm(g, 2) for g in grads]
-    optimizer.apply_gradients(zip(grads, model.trainable_weights))
-
-    return loss, greedy_seqs
-
-
-def rl_train_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
-    model.switch_decoding_mode('self_critic')
-
-    with tf.GradientTape() as tape:
-        greedy_probs, sample_probs, greedy_seqs, sample_seqs, coverage_losses = model(extended_input_tokens,
-                                                                                      extended_gt_tokens,
-                                                                                      training=True)
-        loss = 0
-        loss += tf.nn.compute_average_loss(ce_loss(extended_gt_tokens, sample_probs, loss_mask),
-                                           global_batch_size=global_batch_size)
-        loss += tf.nn.compute_average_loss(rl_loss(extended_gt_tokens, sample_probs),
-                                           global_batch_size=global_batch_size)
 
     grads = tape.gradient(loss, model.trainable_weights)
     grads = [tf.clip_by_norm(g, 2) for g in grads]
@@ -130,9 +109,6 @@ def eval_step(extended_input_tokens, extended_gt_tokens, loss_mask, idx):
 @tf.function
 def distributed_step(dist_inputs, mode):
     if mode == 'train':
-        per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
-
-    elif mode == 'rl_train':
         per_replica_losses, greedy_seqs = train_strategy.run(pretrain_step, args=(dist_inputs))
 
     elif mode == 'val':
@@ -206,6 +182,3 @@ for epoch in range(1, pretrain_epochs + 1):
             save_model(model, model_checkpoints, epoch, batch_n)
 
     save_model(model, model_checkpoints, epoch, 'last')
-
-print("Training complete:)")
-

@@ -4,6 +4,9 @@ import tensorflow_probability as tfp
 
 
 class Encoder(layers.Layer):
+    """
+    Реализован слой энкодера сети (двунаправленная LSTM)
+    """
     def __init__(self, layer_name='encoder', lstm_units=128, vocab_size=10000,
                  embedding_dim=512, bahdanau_attention_units=128):
         super(Encoder, self).__init__(name=layer_name)
@@ -22,6 +25,14 @@ class Encoder(layers.Layer):
         self.state_c_compression = layers.Dense(lstm_units, activation='relu', name='state_m_compr')
 
     def call(self, input_tokens):
+        """
+        Params:
+            input_tokens: тензор с токенами резюмируемого текста
+        Return:
+            [dec_m_state, dec_c_state]:
+            enc_output:
+            enc_attn:
+        """
         input_vectors = self.enc_emb(input_tokens)
         enc_output, fw_m_state, fw_c_state, bw_m_state, bw_c_state = self.bidir_lstm(input_vectors,
                                                                                      mask=input_vectors._keras_mask)
@@ -36,6 +47,9 @@ class Encoder(layers.Layer):
 
 
 class BahdanauAttention(layers.Layer):
+    """
+    Реализовано внимание Бахданау
+    """
     def __init__(self, layer_name='attention', bahdanau_attention_units=128):
         super(BahdanauAttention, self).__init__(name=layer_name)
         self.bahdanau_attention_units = bahdanau_attention_units
@@ -45,6 +59,11 @@ class BahdanauAttention(layers.Layer):
         self.attn = layers.Dense(1, use_bias=False, name='attn')
 
     def call(self, enc_output, enc_attn, coverage_vector, dec_state):
+        """
+        Return:
+            attn: распределение внимания бахданау по токенам входной последовательности
+            c_vector: вектор контекста
+        """
         dec_attn = self.decoder_state_layer(dec_state)
         dec_attn = tf.expand_dims(dec_attn, 1)
         dec_attn = tf.repeat(dec_attn, repeats=enc_attn.shape[1], axis=1)
@@ -59,6 +78,9 @@ class BahdanauAttention(layers.Layer):
 
 
 class DecodeStep(layers.Layer):
+    """
+    В этом классе определены методы для выполнения шага декодирования с использованием внимания
+    """
     def __init__(self, layer_name='decode_step', lstm_units=128, vocab_size=10000,
                  bahdanau_attention_units=128, gen_prob_units=128, max_oovs_in_text=100):
         super(DecodeStep, self).__init__(name=layer_name)
@@ -123,10 +145,13 @@ class DecodeStep(layers.Layer):
 
 
 class Decoder(layers.Layer):
+    """
+    Реализован декодер сети (LSTM). Основной процесс декодирования происходит через вызов объекта DecodeStep
+    """
     def __init__(self, decoding_mode='self_critic', layer_name='decoder', embedding_dim=512,
                  vocab=None, lstm_units=128, bahdanau_attention_units=128, gen_prob_units=128,
                  max_oovs_in_text=100):
-        assert decoding_mode in ['self_critic', 'cross_entropy', 'evaluate', 'beam_search'], 'Unknown decoding mode'
+        assert decoding_mode in ['self_critic', 'cross_entropy', 'evaluate'], 'Unknown decoding mode'
         self.decoding_mode = decoding_mode
         super(Decoder, self).__init__(name=layer_name)
         self.vocab, self.vocab_size, self.embedding_dim = vocab, vocab.size(), embedding_dim
@@ -137,12 +162,14 @@ class Decoder(layers.Layer):
                                       bahdanau_attention_units=bahdanau_attention_units,
                                       gen_prob_units=gen_prob_units, max_oovs_in_text=max_oovs_in_text)
 
-        self.beam_width = 4
-
-    def set_beam_width(self, beam_width):
-        self.beam_width = beam_width
-
     def call(self, gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state, tape=None):
+        """
+        В зависимости от режима декодирования алгоритм будет работать по-разному.
+        При обучении и тестировании модели (self.decoding_mode in ['self_critic', 'evaluate'])
+        предыдущие токены будут сэмплироваться из самой модели.
+        При обучении с перекрестной энтропией (self.decoding_mode == 'cross_entropy')
+        предыдущие токены беруться из гт резюме.
+        """
         if self.decoding_mode in ['self_critic', 'evaluate']:
             greedy_coverage_vector = tf.zeros(extended_input_tokens.shape)
             sample_coverage_vector = tf.zeros(extended_input_tokens.shape)
@@ -230,73 +257,14 @@ class Decoder(layers.Layer):
 
             return probs, greedy_seqs, coverage_losses
 
-        elif self.decoding_mode == 'beam_search':
-            # gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state
-            batch_size = extended_input_tokens.shape[0]
-            cumulative_seq_logits = tf.zeros([batch_size, self.beam_width], dtype=tf.float32)
-            greedy_seqs = tf.TensorArray(dtype=tf.int32, size=0, dynamic_size=True)
-
-            greedy_prev_word_vector = self.dec_emb(gt_tokens[:, :1])
-            greedy_prev_word_vector = tf.repeat(greedy_prev_word_vector, self.beam_width, axis=0)
-            greedy_rnn_state = tf.repeat(rnn_state[0], self.beam_width, axis=0),\
-                               tf.repeat(rnn_state[1], self.beam_width, axis=0)
-            greedy_coverage_vector = tf.zeros(extended_input_tokens.shape)
-            greedy_coverage_vector = tf.repeat(greedy_coverage_vector, self.beam_width, axis=0)
-            extended_input_tokens = tf.repeat(extended_input_tokens, self.beam_width, axis=0)
-            enc_output = tf.repeat(enc_output, self.beam_width, axis=0)
-            enc_attn = tf.repeat(enc_attn, self.beam_width, axis=0)
-            greedy_seqs = greedy_seqs.write(0, [4 for _ in range(batch_size*self.beam_width)])
-
-            for i in range(1, gt_tokens.shape[1]+1):
-                greedy_output = self.decode_step(extended_input_tokens, enc_output, enc_attn,
-                                                 greedy_rnn_state, greedy_prev_word_vector,
-                                                 greedy_coverage_vector)
-                greedy_coverage_vector, greedy_pred_probs, greedy_rnn_state, _ = greedy_output
-
-                extended_vocab_size = greedy_pred_probs.shape[-1]
-                greedy_pred_logits = tf.math.log(greedy_pred_probs)
-                greedy_pred_logits = tf.reshape(greedy_pred_logits, [batch_size, self.beam_width, -1])
-
-                cur_cumulative_seq_logits = tf.expand_dims(cumulative_seq_logits, axis=-1)
-                new_cumulative_seq_logits = cur_cumulative_seq_logits + greedy_pred_logits
-                new_cumulative_seq_logits = tf.reshape(new_cumulative_seq_logits, [batch_size, -1])
-
-                beam_top_k_vals, beam_top_k_inds = tf.math.top_k(new_cumulative_seq_logits, k=self.beam_width)
-                cumulative_seq_logits = beam_top_k_vals
-                batch_base_inds = tf.constant([i*self.beam_width for i in range(batch_size)])
-                batch_base_inds = tf.repeat(batch_base_inds, self.beam_width, axis=0)
-                beam_inds = tf.math.floordiv(beam_top_k_inds, extended_vocab_size)
-                seq_inds = batch_base_inds + tf.reshape(beam_inds, [-1])
-                greedy_coverage_vector = tf.gather(greedy_coverage_vector, seq_inds)
-                greedy_rnn_state = tf.gather(greedy_rnn_state[0], seq_inds), tf.gather(greedy_rnn_state[1], seq_inds)
-
-                seqs = greedy_seqs.stack()
-                seqs = tf.transpose(seqs, [1, 0])
-                new_seqs = tf.gather(seqs, seq_inds)
-                new_seqs = tf.transpose(new_seqs, [1, 0])
-                greedy_seqs = greedy_seqs.unstack(new_seqs)
-
-                token_inds = tf.math.floormod(beam_top_k_inds, extended_vocab_size)
-                greedy_seqs = greedy_seqs.write(i, tf.reshape(token_inds, [-1]))
-
-            greedy_seqs = tf.transpose(greedy_seqs.stack(), [1, 0])
-            greedy_seqs = tf.reshape(greedy_seqs, [batch_size, self.beam_width, -1])
-            batch_inds = tf.constant([i for i in range(batch_size)], dtype=tf.int32)
-            batch_inds = tf.expand_dims(batch_inds, axis=-1)
-            best_beam_inds = tf.argmax(cumulative_seq_logits, axis=-1)
-            best_beam_inds = tf.cast(best_beam_inds, tf.int32)
-            best_beam_inds = tf.expand_dims(best_beam_inds, axis=-1)
-            best_seqs_inds = tf.concat([batch_inds, best_beam_inds], axis=-1)
-
-            best_seqs = tf.gather_nd(greedy_seqs, best_seqs_inds)
-            return best_seqs
-
 
 class PGN(tf.keras.models.Model):
-    # class PGN(layers.Layer):
+    """
+    Реализация Pointer Generator Network
+    """
     def __init__(self, decoding_mode='self_critic', layer_name='pgn', embedding_dim=128,
                  vocab=None, lstm_units=256, bahdanau_attention_units=512, gen_prob_units=128,
-                 max_oovs_in_text=100, beam_width = 4):
+                 max_oovs_in_text=100):
         assert decoding_mode in ['self_critic', 'cross_entropy', 'evaluate', 'beam_search'], 'Unknown decoding mode'
         super(PGN, self).__init__(name=layer_name)
         self.vocab, self.decoding_mode = vocab, decoding_mode
@@ -309,18 +277,15 @@ class PGN(tf.keras.models.Model):
                                lstm_units=lstm_units, bahdanau_attention_units=bahdanau_attention_units,
                                gen_prob_units=gen_prob_units, max_oovs_in_text=max_oovs_in_text)
 
-        self.beam_width = beam_width
-
     def switch_decoding_mode(self, mode):
-        assert mode in ['self_critic', 'cross_entropy', 'evaluate', 'beam_search'], 'Unknown decoding mode'
+        """
+        Переключение decoding_mode позволяет изменять алгоритм генерации последовательностей. (см DecodeStep)
+        """
+        assert mode in ['self_critic', 'cross_entropy', 'evaluate'], 'Unknown decoding mode'
         self.decoding_mode = mode
         self.decoder.decoding_mode = mode
 
-    def set_beam_width(self, beam_width):
-        self.beam_width = beam_width
-
     def call(self, extended_input_tokens, extended_gt_tokens, tape=None):
-
         input_tokens = tf.where(extended_input_tokens >= self.vocab_size, self.unk_token, extended_input_tokens)
         gt_tokens = tf.where(extended_gt_tokens >= self.vocab_size, self.unk_token, extended_gt_tokens)
 
@@ -336,8 +301,3 @@ class PGN(tf.keras.models.Model):
             decoder_output = self.decoder(gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state)
             gt_probs, greedy_seqs, coverage_losses = decoder_output
             return gt_probs, greedy_seqs, coverage_losses
-
-        elif self.decoding_mode == 'beam_search':
-            self.decoder.set_beam_width(self.beam_width)
-            decoder_output = self.decoder(gt_tokens, extended_input_tokens, enc_output, enc_attn, rnn_state)
-            return decoder_output

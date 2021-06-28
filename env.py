@@ -8,6 +8,10 @@ from settings import bleurt_model, summary_max_tokens
 
 
 class Detokenize(layers.Layer):
+    """
+    Этот класс реализует декодирование последовательности токенов в текст с использованием указателя (pointer)
+    с поддержкой графового режима tf.
+    """
     def __init__(self, vocab, **kwargs):
         super(Detokenize, self).__init__(**kwargs)
         self.vocab_size = vocab.size()
@@ -24,6 +28,11 @@ class Detokenize(layers.Layer):
         self.table = tf.lookup.StaticHashTable(init, default_value=UNKNOWN_TOKEN)
 
     def call(self, input_seqs, oovs):
+        """
+        Params:
+            input_seqs: tf.Tensor: тензор с последовательностями токенов
+            oovs: tf.Tensor: тензор с временным словарем с OOV словами
+        """
         oovs_mask = tf.where(input_seqs > self.vocab_size, 1, 0)
         loss_mask = tf.where(input_seqs == self.end_id, 1, 0)
         loss_mask = tf.cumsum(loss_mask, axis=1, exclusive=True)
@@ -36,9 +45,9 @@ class Detokenize(layers.Layer):
         bad_words = bad_words.stack()
         bad_words_mask = tf.math.reduce_any(bad_words, axis=0)
 
-        # get vocab words
+        # декодируем слова из словаря
         vocab_words = self.table.lookup(input_seqs)
-        # get oov words
+        # декодируем слова из временного oov словаря
         oov_input_seqs = tf.where(input_seqs > self.vocab_size, input_seqs-self.vocab_size, 0)
         batch_inds = tf.expand_dims(tf.range(input_seqs.shape[0]), axis=-1)
         batch_inds = tf.tile(batch_inds, [1, summary_max_tokens+1])
@@ -55,16 +64,28 @@ class Detokenize(layers.Layer):
 
 
 class BleurtLayer(layers.Layer):
+    """
+    Этот класс создает слой, осуществляющий оценку резюме по метрике bleurt
+    """
     def __init__(self, **kwargs):
         super(BleurtLayer, self).__init__(**kwargs)
         self.bleurt_ops = bleurt_score.create_bleurt_ops(bleurt_model)
 
     def call(self, gt_summary, pred_summary):
+        """
+        Params:
+            gt_summary: tf.Tensor: тензор с гт резюме
+            pred_summary: tf.Tensor: тензор со сгенерированными резюме
+        """
         scores = self.bleurt_ops(gt_summary, pred_summary)
         return scores
 
 
 class Env:
+    """
+    Класс инкапсулирет bleurt и rouge скореры. Также предоставляет методы для вычисления метрик.
+    Методы не поддерживаются в графовом режиме!
+    """
     def __init__(self, data, bleurt_device):
         self.data = data
         self.bleurt_device = bleurt_device
@@ -73,14 +94,25 @@ class Env:
         self.rouge_scorer = rouge_scorer.RougeScorer(['rouge1', 'rouge2', 'rougeL'], use_stemmer=True)
 
     def get_rewards(self, batch_texts, batch_tokens, batch_oovs, no_bad_words=True, get_rogue=True):
-
+        """
+        Метод выполняет вычисление метрик для батча резюме.
+        Params:
+            batch_texts: гт резюме
+            batch_tokens: токены сгенерированного резюме
+            batch_oovs: временные словари с oov ловами
+            no_bad_words: bool: Если истина, то специальные слова ([UNK], [PAD], ...) удаляются из резюме, если ложь - остаются
+            get_rogue: bool: Если истина, то выполняется подсчет rouge метрик, если ложь - только bleurt метрика
+        """
         if no_bad_words:
             for i, text in enumerate(batch_texts):
                 batch_texts[i] = remove_bad_words(text)
 
         summaries, summary_lens = [], []
         for i, (tokens, oovs) in enumerate(zip(batch_tokens, batch_oovs)):
+
+            # для декодирования oov слов применяется метод detokenize класса Data. Метод не поддерживается в графовом режиме.
             summary = self.data.detokenize(tokens, oovs)
+
             summary_lens.append(len(summary.split()))
             if no_bad_words:
                 summary = remove_bad_words(summary)
@@ -108,13 +140,11 @@ class Env:
 
         return scores, summaries, time_step_masks
 
-    @tf.function
-    def tf_get_rewards(self, gt_text, chosen_tokens, temp_oovs_tensor):
-        bleurt_scores = 0
-        return bleurt_scores
-
 
 class CELoss(layers.Layer):
+    """
+    Класс представляет из себя слой перекрестной энтропии
+    """
     def __init__(self, alpha=1., layer_name='ce_loss'):
         super(CELoss, self).__init__(name=layer_name)
         self.alpha = alpha
@@ -123,6 +153,12 @@ class CELoss(layers.Layer):
         self.alpha = alpha
 
     def call(self, gt, probs, time_step_mask):
+        """
+        Params:
+            gt: tf.Tensor: индексы гт токенов
+            probs: tf.Tensor: распределение вероятностей генерируемого токена
+            time_step_mask: tf.Tensor: маска пэддингов
+        """
         # probs.shape = (batch, seqlen, classes)
         gt, probs, time_step_mask = gt[:, 1:], probs[:, :-1], time_step_mask[:, 1:]
 
@@ -136,16 +172,10 @@ class CELoss(layers.Layer):
         return loss
 
 
-class CoverLoss(layers.Layer):
-    def __init__(self, alpha=1., layer_name='cover_loss'):
-        super(CoverLoss, self).__init__(name=layer_name)
-        self.alpha = alpha
-
-    def call(self, cover_loss, time_step_mask):
-        return cover_loss * time_step_mask * self.alpha
-
-
 class RLLoss(layers.Layer):
+    """
+    Класс осуществляет ошибку при обучении с помощью алгоритма self-critic
+    """
     def __init__(self, alpha=1., layer_name='rl_loss'):
         super(RLLoss, self).__init__(name=layer_name)
         self.alpha = alpha
@@ -154,6 +184,13 @@ class RLLoss(layers.Layer):
         self.alpha = alpha
 
     def call(self, chosen_tokens, probs, time_step_mask, delta_rewards):
+        """
+        Params:
+            chosen_tokens: tf.Tensor: тензор со сгенерированными токенами (сэмплированными из распределения)
+            probs: tf.Tensor: тензор с распределением вероятностей токенов на каждом шаге генерации
+            time_step_mask: tf.Tensor: маска пэддингов
+            delta_rewards: tf.Tensor: награды (разность наград)
+        """
         batch_inds = tf.expand_dims(tf.range(probs.shape[0]), axis=1)
         batch_inds = tf.tile(batch_inds, [1, summary_max_tokens+1])
 

@@ -27,7 +27,7 @@ train_strategy = tf.distribute.MirroredStrategy(devices=devices)
 
 
 #################################################################################################
-# LOADING DATA
+# Загрузка данных
 #################################################################################################
 
 # Loading TRAIN data
@@ -72,7 +72,7 @@ print('Max oovs in text :', max_oovs_in_text)
 
 
 #################################################################################################
-# DEFINE MULTIGPU TRAIN STEP FUNCTIONS
+# Создаем модель и слои ошибок, определяем функцию для распределенного обучения
 #################################################################################################
 
 with train_strategy.scope():
@@ -233,6 +233,3 @@ for epoch in range(1, rl_train_epochs + 1):
             save_model(model, model_checkpoints, epoch, batch_n)
 
     save_model(model, model_checkpoints, epoch, 'last')
-
-print("Training complete:)")
-

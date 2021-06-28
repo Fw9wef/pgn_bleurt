@@ -1,2 +1,36 @@
-# pgn_bleurt
-This repo implements Pointer Generator Network with RL training loop
+В этом репозитории находится реализация Pointer Generator Network.
+Также для этой сети реализовано обучение с подкреплением с помощью self-critic алгоритма.
+
+# Подготовка данных
+
+Данные для обучения модели на CNN/DM можно скачать из
+https://drive.google.com/file/d/0BzQ6rtO2VN95a0c3TlZCWkl3aU0/view?resourcekey=0-toctC3TNM1vffPCZ7XT0JA
+Этот архив содержит папку finished_files. Внутри - папка chunked - пака с используемыми данными. Путь к ней должен быть
+указан в переменной data_folder в settings.py Также там находится файл vocab - путь к нему указывается в переменной
+vocab_file. Более подробно о содержимом архива можно почитать https://github.com/abisee/cnn-dailymail
+
+# Запуск обучения
+
+Настройка параметров обучения производится через файл settings.py
+Запуск можно произвести с помощью 3-х скриптов:
+
+Запуск предобучения производится с помощью файла pretrain.py
+
+`python pretrain.py`
+
+Обучение предобученной модели с помощью self-critic алгоритма (требуется задать параметр load_model_path):
+
+`python rl_train.py`
+
+Предобучение с последующим дообучением:
+
+`python train.py`
+
+
+# Тестирование модели
+
+Аналогично все настройки указываются в файле settings.py
+Для тестирования обязательно требуется указать параметр load_model_path.
+
+`python evaluate.py`
+
